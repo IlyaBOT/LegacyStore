@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LegacyStore</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="history-controls" aria-label="Navigation">
+          <button class="history-button" id="backButton" type="button" aria-label="Back"></button>
+          <button class="history-button next" id="forwardButton" type="button" aria-label="Forward"></button>
+        </div>
+
+        <nav class="toolbar-tabs" aria-label="Primary">
+          <button class="toolbar-tab is-active" data-route="home" type="button">
+            <span class="tab-icon icon-featured"></span>
+            <span>Featured</span>
+          </button>
+          <button class="toolbar-tab" data-route="top-charts" type="button">
+            <span class="tab-icon icon-chart"></span>
+            <span>Top Charts</span>
+          </button>
+          <button class="toolbar-tab" data-route="categories" type="button">
+            <span class="tab-icon icon-categories"></span>
+            <span>Categories</span>
+          </button>
+          <button class="toolbar-tab" data-route="downloads" type="button">
+            <span class="tab-icon icon-downloads"></span>
+            <span>Downloads</span>
+          </button>
+          <button class="toolbar-tab" data-route="updates" type="button">
+            <span class="tab-icon icon-updates"></span>
+            <span>Updates</span>
+          </button>
+        </nav>
+
+        <form class="search-box" id="searchForm">
+          <span class="search-glass"></span>
+          <input id="searchInput" name="q" type="search" autocomplete="off" aria-label="Search LegacyStore">
+        </form>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <main class="main" id="main" tabindex="-1"></main>
+      </div>
+
+      <footer class="statusbar">
+        <div id="statusLeft">Showing: All Categories</div>
+        <div id="statusCenter">0 items</div>
+        <div id="statusRight">Sort By: Featured</div>
+      </footer>
+    </div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
