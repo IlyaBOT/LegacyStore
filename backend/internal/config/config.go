@@ -8,6 +8,7 @@ type Config struct {
 	PublicBaseURL         string
 	DatabaseURL           string
 	CatalogSigningEnabled bool
+	TrustProxyHeaders     bool
 }
 
 func Load() Config {
@@ -17,6 +18,7 @@ func Load() Config {
 		PublicBaseURL:         env("PUBLIC_BASE_URL", "http://localhost:8080"),
 		DatabaseURL:           env("DATABASE_URL", ""),
 		CatalogSigningEnabled: env("CATALOG_SIGNING_ENABLED", "false") == "true",
+		TrustProxyHeaders:     env("TRUST_PROXY_HEADERS", "false") == "true",
 	}
 }
 
