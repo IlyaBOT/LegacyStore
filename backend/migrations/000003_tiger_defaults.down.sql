@@ -1,0 +1,12 @@
+BEGIN;
+
+ALTER TABLE artifacts
+    ALTER COLUMN min_os SET DEFAULT '10.5';
+
+ALTER TABLE icons
+    ALTER COLUMN min_os SET DEFAULT '10.5';
+
+ALTER TABLE screenshots
+    ALTER COLUMN min_os SET DEFAULT '10.5';
+
+COMMIT;
