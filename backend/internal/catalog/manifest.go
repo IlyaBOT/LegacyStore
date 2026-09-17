@@ -33,25 +33,25 @@ type ManifestVersion struct {
 }
 
 type ManifestArtifact struct {
-	ID                 int64    `json:"id"`
-	FileName           string   `json:"file_name"`
-	PackageType        string   `json:"package_type"`
-	SourceType         string   `json:"source_type"`
-	DownloadURL        string   `json:"download_url,omitempty"`
-	TorrentURL         string   `json:"torrent_url,omitempty"`
-	MagnetURL          string   `json:"magnet_url,omitempty"`
-	SizeBytes          int64    `json:"size_bytes"`
-	SHA256             string   `json:"sha256"`
-	MinOS              string   `json:"min_os"`
-	MaxSupportedOS     string   `json:"max_supported_os,omitempty"`
-	MaxTestedOS        string   `json:"max_tested_os,omitempty"`
-	HardBlockAboveMax  bool     `json:"hard_block_above_max,omitempty"`
-	Archs              []string `json:"archs"`
-	Supports32Bit      bool     `json:"supports_32bit"`
-	Supports64Bit      bool     `json:"supports_64bit"`
-	RequiresRosetta    bool     `json:"requires_rosetta,omitempty"`
-	RequiresJava       bool     `json:"requires_java,omitempty"`
-	InstallNotes       string   `json:"install_notes,omitempty"`
+	ID                int64    `json:"id"`
+	FileName          string   `json:"file_name"`
+	PackageType       string   `json:"package_type"`
+	SourceType        string   `json:"source_type"`
+	DownloadURL       string   `json:"download_url,omitempty"`
+	TorrentURL        string   `json:"torrent_url,omitempty"`
+	MagnetURL         string   `json:"magnet_url,omitempty"`
+	SizeBytes         int64    `json:"size_bytes"`
+	SHA256            string   `json:"sha256"`
+	MinOS             string   `json:"min_os"`
+	MaxSupportedOS    string   `json:"max_supported_os,omitempty"`
+	MaxTestedOS       string   `json:"max_tested_os,omitempty"`
+	HardBlockAboveMax bool     `json:"hard_block_above_max,omitempty"`
+	Archs             []string `json:"archs"`
+	Supports32Bit     bool     `json:"supports_32bit"`
+	Supports64Bit     bool     `json:"supports_64bit"`
+	RequiresRosetta   bool     `json:"requires_rosetta,omitempty"`
+	RequiresJava      bool     `json:"requires_java,omitempty"`
+	InstallNotes      string   `json:"install_notes,omitempty"`
 }
 
 func (s *Store) Manifest(ctx context.Context) (*ManifestPayload, error) {
