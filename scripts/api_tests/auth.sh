@@ -52,7 +52,7 @@ test_two_factor() {
   PASSWORD=$REGISTER_PASSWORD
   TOKEN=$REGISTER_TOKEN
 
-  api_request POST '/api/v1/auth/2fa/setup' 1 "$TOKEN" '{}'
+  api_request POST '/api/v1/auth/2fa/setup' 1 "$TOKEN" "{\"current_password\":\"$PASSWORD\"}"
   if ! status_is 200 || ! jq_ok '.secret and .otpauth_url'; then
     err "$NAME" Setup 'secret and otpauth_url' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
@@ -61,10 +61,11 @@ test_two_factor() {
   CODE=$(totp_code "$SECRET")
 
   api_request POST '/api/v1/auth/2fa/verify' 1 "$TOKEN" "{\"totp_code\":\"$CODE\"}"
-  if ! status_is 200 || ! jq_ok '.status == "enabled"'; then
-    err "$NAME" Verify '2FA enabled' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  if ! status_is 200 || ! jq_ok '.status == "enabled" and (.recovery_codes | type == "array" and length == 10)'; then
+    err "$NAME" Verify '2FA enabled with 10 recovery codes' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
+  RECOVERY_CODE=$(body_value '.recovery_codes[0]')
 
   api_request POST '/api/v1/auth/login' 1 '' "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
   if ! status_is 401 || ! jq_ok '.error == "two_factor_required"'; then
@@ -80,8 +81,28 @@ test_two_factor() {
     return
   fi
 
+  api_request POST '/api/v1/auth/login' 1 '' "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"recovery_code\":\"$RECOVERY_CODE\"}"
+  RECOVERY_LOGIN_TOKEN=$(body_value '.session_token // empty')
+  if ! status_is 200 || [ -z "$RECOVERY_LOGIN_TOKEN" ]; then
+    err "$NAME" LoginWithRecoveryCode 'successful login and token' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST '/api/v1/auth/login' 1 '' "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"recovery_code\":\"$RECOVERY_CODE\"}"
+  if ! status_is 401 || ! jq_ok '.error == "two_factor_required"'; then
+    err "$NAME" RecoveryCodeSingleUse 'used recovery code rejected' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
   CODE=$(totp_code "$SECRET")
-  api_request POST '/api/v1/auth/2fa/disable' 1 "$TOKEN" "{\"totp_code\":\"$CODE\"}"
+  api_request POST '/api/v1/auth/2fa/recovery-codes/regenerate' 1 "$TOKEN" "{\"current_password\":\"$PASSWORD\",\"totp_code\":\"$CODE\"}"
+  if ! status_is 200 || ! jq_ok '.recovery_codes | type == "array" and length == 10'; then
+    err "$NAME" RegenerateRecoveryCodes '10 new recovery codes' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  CODE=$(totp_code "$SECRET")
+  api_request POST '/api/v1/auth/2fa/disable' 1 "$TOKEN" "{\"current_password\":\"$PASSWORD\",\"totp_code\":\"$CODE\"}"
   if ! status_is 200 || ! jq_ok '.status == "disabled"'; then
     err "$NAME" Disable '2FA disabled' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
