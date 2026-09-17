@@ -117,3 +117,38 @@ func TestInspectAppBundlePartsReportsMissingFields(t *testing.T) {
 		}
 	}
 }
+
+func TestNestedExtractionCandidateDetectsHFSVolume(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "partition.bin")
+	data := make([]byte, 2048)
+	copy(data[1024:1026], []byte("H+"))
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !isNestedArchiveCandidate(path) {
+		t.Fatal("HFS+ partition image should be recursively extracted")
+	}
+}
+
+func TestNestedExtractionCandidatesIncludePayloadAndHFS(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "4.hfs"), []byte("volume"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Payload"), []byte("payload"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := nestedExtractionCandidates(root, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2: %#v", len(candidates), candidates)
+	}
+	for _, candidate := range candidates {
+		if candidate.depth != 2 {
+			t.Fatalf("candidate depth = %d, want 2", candidate.depth)
+		}
+	}
+}
