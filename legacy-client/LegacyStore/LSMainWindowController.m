@@ -63,7 +63,9 @@ static NSString *LSUpdatesToolbarItem = @"LegacyStoreUpdates";
     _splitView = [[[NSSplitView alloc] initWithFrame:bounds] autorelease];
     [_splitView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [_splitView setVertical:YES];
+#if defined(MAC_OS_X_VERSION_MAX_ALLOWED) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
     [_splitView setDividerStyle:NSSplitViewDividerStyleThin];
+#endif
     [content addSubview:_splitView];
 
     NSView *sidebarContainer = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 188, bounds.size.height)] autorelease];
@@ -151,11 +153,15 @@ static NSString *LSUpdatesToolbarItem = @"LegacyStoreUpdates";
 
     [_splitView addSubview:sidebarContainer];
     [_splitView addSubview:mainContainer];
+#if defined(MAC_OS_X_VERSION_MAX_ALLOWED) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
     [_splitView setPosition:188.0 ofDividerAtIndex:0];
+#else
+    [_splitView adjustSubviews];
+#endif
 
     [_sidebarItems addObject:[NSDictionary dictionaryWithObjectsAndKeys:@"All Software", @"name", @"", @"slug", nil]];
     [_sidebarTable reloadData];
-    [_sidebarTable selectRowIndexes:[NSIndexSet indexSetWithIndex:0] byExtendingSelection:NO];
+    [_sidebarTable selectRow:0 byExtendingSelection:NO];
 
     [self showCatalogStatus:@"Connecting to LegacyStore..."];
     [_apiClient loadCategories];
