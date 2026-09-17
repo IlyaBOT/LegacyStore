@@ -36,11 +36,6 @@ func (s *Store) Register(ctx context.Context, email, nickname, password string, 
 	}
 	defer tx.Rollback()
 
-	var userCount int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&userCount); err != nil {
-		return nil, err
-	}
-
 	var user User
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO users (email, password_hash, nickname, email_verified, status)
@@ -64,18 +59,14 @@ func (s *Store) Register(ctx context.Context, email, nickname, password string, 
 		return nil, err
 	}
 
-	role := "user"
-	if userCount == 0 {
-		role = "admin"
-	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO user_roles (user_id, role_id)
-		SELECT $1, id FROM roles WHERE name = $2
+		SELECT $1, id FROM roles WHERE name = 'user'
 		ON CONFLICT DO NOTHING
-	`, user.ID, role); err != nil {
+	`, user.ID); err != nil {
 		return nil, err
 	}
-	user.Roles = []string{role}
+	user.Roles = []string{"user"}
 
 	token, expiresAt, err := createSession(ctx, tx, user.ID, remember, ip, userAgent)
 	if err != nil {
@@ -161,7 +152,8 @@ func (s *Store) UserBySession(ctx context.Context, token string, ip net.IP, user
 		SELECT u.id, u.email, COALESCE(u.nickname, ''), COALESCE(u.avatar_url, ''), u.email_verified,
 		       u.two_factor_enabled, u.status, u.created_at::text, u.updated_at::text,
 		       s.id, COALESCE(s.device_name, ''), COALESCE(s.ip_address::text, ''), COALESCE(s.user_agent, ''),
-		       s.remember_me, s.expires_at::text, s.last_seen_at::text, s.created_at::text
+		       s.remember_me, s.auth_kind, s.scopes, COALESCE(s.legacy_password_id, 0), COALESCE(s.legacy_device_identifier, ''),
+		       s.expires_at::text, s.last_seen_at::text, s.created_at::text
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active'
@@ -180,6 +172,10 @@ func (s *Store) UserBySession(ctx context.Context, token string, ip net.IP, user
 		&session.IPAddress,
 		&session.UserAgent,
 		&session.RememberMe,
+		&session.AuthKind,
+		pq.Array(&session.Scopes),
+		&session.LegacyPasswordID,
+		&session.LegacyDeviceIdentifier,
 		&session.ExpiresAt,
 		&session.LastSeenAt,
 		&session.CreatedAt,
@@ -295,6 +291,7 @@ func (s *Store) Disable2FA(ctx context.Context, userID int64, code string) error
 func (s *Store) ListSessions(ctx context.Context, userID int64) ([]Session, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, COALESCE(device_name, ''), COALESCE(ip_address::text, ''), COALESCE(user_agent, ''), remember_me,
+		       auth_kind, scopes, COALESCE(legacy_password_id, 0), COALESCE(legacy_device_identifier, ''),
 		       expires_at::text, last_seen_at::text, created_at::text
 		FROM sessions
 		WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
@@ -307,7 +304,20 @@ func (s *Store) ListSessions(ctx context.Context, userID int64) ([]Session, erro
 	var sessions []Session
 	for rows.Next() {
 		var session Session
-		if err := rows.Scan(&session.ID, &session.DeviceName, &session.IPAddress, &session.UserAgent, &session.RememberMe, &session.ExpiresAt, &session.LastSeenAt, &session.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&session.ID,
+			&session.DeviceName,
+			&session.IPAddress,
+			&session.UserAgent,
+			&session.RememberMe,
+			&session.AuthKind,
+			pq.Array(&session.Scopes),
+			&session.LegacyPasswordID,
+			&session.LegacyDeviceIdentifier,
+			&session.ExpiresAt,
+			&session.LastSeenAt,
+			&session.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, session)
@@ -327,6 +337,10 @@ func (s *Store) RevokeSession(ctx context.Context, userID, sessionID int64) erro
 }
 
 func createSession(ctx context.Context, tx *sql.Tx, userID int64, remember bool, ip net.IP, userAgent string) (string, time.Time, error) {
+	return createScopedSession(ctx, tx, userID, remember, ip, userAgent, "web", nil, 0, "")
+}
+
+func createScopedSession(ctx context.Context, tx *sql.Tx, userID int64, remember bool, ip net.IP, userAgent, authKind string, scopes []string, legacyPasswordID int64, legacyDeviceIdentifier string) (string, time.Time, error) {
 	token, err := randomToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -336,10 +350,18 @@ func createSession(ctx context.Context, tx *sql.Tx, userID int64, remember bool,
 		duration = 30 * 24 * time.Hour
 	}
 	expiresAt := time.Now().UTC().Add(duration)
+	var legacyID any
+	if legacyPasswordID > 0 {
+		legacyID = legacyPasswordID
+	}
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO sessions (user_id, token_hash, remember_me, device_name, ip_address, user_agent, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, userID, tokenHash(token), remember, deviceName(userAgent), nullableIP(ip), truncate(userAgent, 512), expiresAt)
+		INSERT INTO sessions (
+			user_id, token_hash, remember_me, device_name, ip_address, user_agent, expires_at,
+			auth_kind, scopes, legacy_password_id, legacy_device_identifier
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, ''))
+	`, userID, tokenHash(token), remember, deviceName(userAgent), nullableIP(ip), truncate(userAgent, 512), expiresAt,
+		authKind, pq.Array(scopes), legacyID, strings.TrimSpace(legacyDeviceIdentifier))
 	return token, expiresAt, err
 }
 
@@ -372,6 +394,17 @@ func HasRole(user User, roles ...string) bool {
 			if have == want {
 				return true
 			}
+	}
+	return false
+}
+
+func SessionHasScope(session Session, scope string) bool {
+	if session.AuthKind == "web" {
+		return true
+	}
+	for _, have := range session.Scopes {
+		if have == scope {
+			return true
 		}
 	}
 	return false
