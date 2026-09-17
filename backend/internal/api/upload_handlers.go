@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"legacystore/backend/internal/account"
+	"legacystore/backend/internal/compatibility"
 	"legacystore/backend/internal/storage"
 )
 
@@ -32,8 +34,6 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// A small extra allowance covers the multipart envelope while the file
-	// stream itself is independently limited by the storage layer.
 	req.Body = http.MaxBytesReader(w, req.Body, r.cfg.MaxUploadBytes+(2<<20))
 	reader, err := req.MultipartReader()
 	if err != nil {
@@ -46,12 +46,16 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 	var uploadedName string
 	for {
 		part, partErr := reader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
 		if errors.Is(partErr, multipart.ErrMessageTooLarge) {
 			writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large")
 			return
 		}
 		if partErr != nil {
-			break
+			writeError(w, http.StatusBadRequest, "invalid_multipart")
+			return
 		}
 		name := part.FormName()
 		if name == "file" {
@@ -62,6 +66,11 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			uploadedName = filepath.Base(part.FileName())
+			if uploadedName == "." || uploadedName == "" {
+				_ = part.Close()
+				writeError(w, http.StatusBadRequest, "invalid_file_name")
+				return
+			}
 			saved, err = local.SaveQuarantine(part, uploadedName)
 			_ = part.Close()
 			if errors.Is(err, storage.ErrTooLarge) {
@@ -75,19 +84,24 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		if name != "" {
-			buffer := make([]byte, 8193)
-			n, _ := part.Read(buffer)
-			if n > 8192 {
-				_ = part.Close()
+			value, readErr := io.ReadAll(io.LimitReader(part, 8193))
+			_ = part.Close()
+			if readErr != nil {
+				if saved != nil {
+					_ = local.Remove(saved.RelativePath)
+				}
+				writeError(w, http.StatusBadRequest, "invalid_multipart")
+				return
+			}
+			if len(value) > 8192 {
 				if saved != nil {
 					_ = local.Remove(saved.RelativePath)
 				}
 				writeError(w, http.StatusBadRequest, "field_too_large")
 				return
 			}
-			fields[name] = strings.TrimSpace(string(buffer[:n]))
+			fields[name] = strings.TrimSpace(string(value))
 		}
-		_ = part.Close()
 	}
 
 	if saved == nil {
@@ -157,6 +171,26 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 			"size_bytes": saved.SizeBytes,
 		},
 	})
+}
+
+func validOSRange(minOS, maxSupportedOS, maxTestedOS string) bool {
+	minVersion, err := compatibility.ParseVersion(minOS)
+	if err != nil {
+		return false
+	}
+	if maxSupportedOS != "" {
+		maxVersion, err := compatibility.ParseVersion(maxSupportedOS)
+		if err != nil || minVersion.Compare(maxVersion) > 0 {
+			return false
+		}
+	}
+	if maxTestedOS != "" {
+		testedVersion, err := compatibility.ParseVersion(maxTestedOS)
+		if err != nil || minVersion.Compare(testedVersion) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func packageTypeFromName(name string) string {
