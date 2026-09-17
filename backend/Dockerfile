@@ -1,6 +1,6 @@
 FROM golang:1.22-alpine
 
-RUN apk add --no-cache ca-certificates postgresql-client
+RUN apk add --no-cache ca-certificates postgresql-client p7zip
 
 WORKDIR /app
 
