@@ -5,6 +5,8 @@ run_public_tests() {
   test_security_headers
   test_categories
   test_app_list
+  test_home_feed
+  test_server_rankings
   test_catalog_filters
   test_search
   test_app_detail_versions
@@ -62,6 +64,53 @@ test_app_list() {
   api_request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=12&page=1' 0
   if ! status_is 200 || ! jq_ok '.apps | type == "array" and length > 0 and .[0].slug and .[0].name and .[0].compatibility'; then
     err "$NAME" Response '200 and app cards with compatibility' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  ok "$NAME"
+}
+
+test_home_feed() {
+  NAME='HomeFeed'
+  api_request GET '/api/v1/home?os=10.9.5&arch=x86_64' 0
+  if ! status_is 200 || ! jq_ok '
+    (.popular | type == "array" and length > 0) and
+    (.top_downloads | type == "array" and length > 0) and
+    (.new_releases | type == "array" and length > 0) and
+    (.slides | type == "array" and length == 4) and
+    (.top_downloads[0].slug == "pixelmator") and
+    (.new_releases[0].slug == "libreoffice") and
+    (.slides | any(.metric == "Top This Week" and .app.slug == "vlc")) and
+    (.slides | any(.metric == "Top Today" and .app.slug == "transmission"))
+  '; then
+    err "$NAME" Response 'ranked home lists and four carousel candidates' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  ok "$NAME"
+}
+
+test_server_rankings() {
+  NAME='ServerRankings'
+  api_request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=3&page=1&sort=downloads' 0
+  if ! status_is 200 || ! jq_ok '.apps[0].slug == "pixelmator" and .apps[0].downloads >= 50'; then
+    err "$NAME" AllTimeDownloads 'Pixelmator first by all-time downloads' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=3&page=1&sort=downloads-week' 0
+  if ! status_is 200 || ! jq_ok '.apps[0].slug == "vlc"'; then
+    err "$NAME" WeeklyDownloads 'VLC first by seven-day downloads' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=3&page=1&sort=downloads-day' 0
+  if ! status_is 200 || ! jq_ok '.apps[0].slug == "transmission"'; then
+    err "$NAME" DailyDownloads 'Transmission first by 24-hour downloads' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=3&page=1&sort=new' 0
+  if ! status_is 200 || ! jq_ok '.apps[0].slug == "libreoffice"'; then
+    err "$NAME" NewReleases 'LibreOffice first by fixture release date' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
   ok "$NAME"
