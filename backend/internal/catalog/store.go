@@ -48,6 +48,7 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 	filters = normalizeFilters(filters)
 	args := []any{}
 	conditions := []string{"a.moderation_status = 'approved'"}
+	orderBy := appOrderBy(filters.Sort)
 
 	if filters.Category != "" {
 		args = append(args, filters.Category)
@@ -87,6 +88,13 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				LIMIT 1
 			), '') AS icon,
 			COALESCE((
+				SELECT image_url
+				FROM screenshots
+				WHERE app_id = a.id
+				ORDER BY sort_order, id
+				LIMIT 1
+			), '') AS hero_image,
+			COALESCE((
 				SELECT AVG(rating)::float8
 				FROM reviews
 				WHERE app_id = a.id AND deleted_at IS NULL
@@ -95,14 +103,19 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				SELECT COUNT(*)
 				FROM reviews
 				WHERE app_id = a.id AND deleted_at IS NULL
-			) AS rating_count
+			) AS rating_count,
+			(
+				SELECT COUNT(*)
+				FROM download_events de
+				WHERE de.app_id = a.id
+			) AS downloads
 		FROM apps a
 		JOIN app_categories ac ON ac.app_id = a.id
 		JOIN categories c ON c.id = ac.category_id
 		WHERE %s
-		ORDER BY a.name
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, strings.Join(conditions, " AND "), limitArg, offsetArg)
+	`, strings.Join(conditions, " AND "), orderBy, limitArg, offsetArg)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -113,7 +126,7 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 	var apps []AppSummary
 	for rows.Next() {
 		var row appRow
-		if err := rows.Scan(&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category, &row.Icon, &row.Rating, &row.RatingCount); err != nil {
+		if err := rows.Scan(&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category, &row.Icon, &row.HeroImage, &row.Rating, &row.RatingCount, &row.Downloads); err != nil {
 			return nil, err
 		}
 
@@ -132,8 +145,10 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 			Category:      row.Category,
 			Summary:       row.Summary,
 			Icon:          row.Icon,
+			HeroImage:     row.HeroImage,
 			Rating:        roundRating(row.Rating),
 			RatingCount:   row.RatingCount,
+			Downloads:     row.Downloads,
 			ArchBadges:    archBadges(selected),
 			Compatibility: result,
 		}

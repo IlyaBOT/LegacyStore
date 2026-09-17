@@ -117,3 +117,67 @@ func TestInspectAppBundlePartsReportsMissingFields(t *testing.T) {
 		}
 	}
 }
+
+func TestNestedExtractionCandidateDetectsHFSVolume(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "partition.bin")
+	data := make([]byte, 2048)
+	copy(data[1024:1026], []byte("H+"))
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !isNestedArchiveCandidate(path) {
+		t.Fatal("HFS+ partition image should be recursively extracted")
+	}
+}
+
+func TestNestedExtractionCandidatesIncludePayloadAndHFS(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "4.hfs"), []byte("volume"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Payload"), []byte("payload"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := nestedExtractionCandidates(root, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2: %#v", len(candidates), candidates)
+	}
+	for _, candidate := range candidates {
+		if candidate.depth != 2 {
+			t.Fatalf("candidate depth = %d, want 2", candidate.depth)
+		}
+	}
+}
+
+func TestQBittorrentBundleMetadataShape(t *testing.T) {
+	plist := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+	<plist version="1.0"><dict>
+	<key>CFBundleDisplayName</key><string>qBittorrent</string>
+	<key>CFBundleName</key><string>qBittorrent</string>
+	<key>CFBundleIconFile</key><string>qbittorrent_mac.icns</string>
+	<key>CFBundleShortVersionString</key><string>4.6.7</string>
+	<key>CFBundleIdentifier</key><string>org.qbittorrent.qBittorrent</string>
+	<key>LSMinimumSystemVersion</key><string>10.14.0</string>
+	</dict></plist>`)
+
+	result := InspectAppBundleParts(plist, nil, "")
+	if result.Metadata.Name != "qBittorrent" {
+		t.Fatalf("name = %q", result.Metadata.Name)
+	}
+	if result.Metadata.BundleID != "org.qbittorrent.qBittorrent" {
+		t.Fatalf("bundle = %q", result.Metadata.BundleID)
+	}
+	if result.Metadata.Version != "4.6.7" {
+		t.Fatalf("version = %q", result.Metadata.Version)
+	}
+	if result.Metadata.MinimumOS != "10.14.0" {
+		t.Fatalf("minimum OS = %q", result.Metadata.MinimumOS)
+	}
+	if result.Metadata.CategorySlug != "" {
+		t.Fatalf("unexpected category = %q", result.Metadata.CategorySlug)
+	}
+}
