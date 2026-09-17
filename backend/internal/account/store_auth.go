@@ -394,6 +394,7 @@ func HasRole(user User, roles ...string) bool {
 			if have == want {
 				return true
 			}
+		}
 	}
 	return false
 }
