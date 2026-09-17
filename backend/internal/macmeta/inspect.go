@@ -171,9 +171,9 @@ type extractionCandidate struct {
 }
 
 func inspectWith7Zip(ctx context.Context, path string, result *Result) error {
-	sevenZip, err := exec.LookPath("7z")
+	sevenZip, err := find7Zip()
 	if err != nil {
-		return errors.New("7z недоступен на сервере")
+		return err
 	}
 
 	workDir, err := os.MkdirTemp("", "legacystore-inspect-*")
@@ -238,6 +238,15 @@ func inspectWith7Zip(ctx context.Context, path string, result *Result) error {
 		return fmt.Errorf("метаданные приложения внутри образа не найдены: %w", lastErr)
 	}
 	return errors.New("метаданные приложения внутри образа не найдены")
+}
+
+func find7Zip() (string, error) {
+	for _, name := range []string{"7zz", "7z"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
+		}
+	}
+	return "", errors.New("7-Zip (7zz/7z) недоступен на сервере")
 }
 
 func extractWith7Zip(ctx context.Context, sevenZip, source, destination string) error {
