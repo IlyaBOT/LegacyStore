@@ -18,7 +18,7 @@ func (r *Router) bootstrap(w http.ResponseWriter, req *http.Request) {
 			"reviews":        r.store != nil,
 			"legacy_auth":    r.users != nil,
 			"p2p":            false,
-			"signed_catalog": r.cfg.CatalogSigningEnabled,
+			"signed_catalog": r.signer != nil,
 		},
 	})
 }

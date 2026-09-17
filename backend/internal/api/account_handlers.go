@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -113,6 +115,9 @@ func (r *Router) legacyLogin(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) logout(w http.ResponseWriter, req *http.Request) {
+	if !r.requireSecure(w, req) {
+		return
+	}
 	token := sessionToken(req)
 	if r.users != nil {
 		_ = r.users.Logout(req.Context(), token)
@@ -436,12 +441,50 @@ func (r *Router) requireAuth(w http.ResponseWriter, req *http.Request) (*account
 		writeAccountError(w, err)
 		return nil, nil, false
 	}
+	if session.AuthKind == "legacy" {
+		scope := requiredLegacyScope(req)
+		if scope == "" || !account.SessionHasScope(*session, scope) {
+			writeError(w, http.StatusForbidden, "legacy_scope_forbidden")
+			return nil, nil, false
+		}
+	}
 	return user, session, true
 }
 
+func requiredLegacyScope(req *http.Request) string {
+	path := req.URL.Path
+	method := req.Method
+
+	if method == http.MethodGet && path == "/api/v1/me" {
+		return "profile:read_basic"
+	}
+	if method == http.MethodPost && path == "/api/v1/auth/refresh" {
+		return "profile:read_basic"
+	}
+	if method == http.MethodPost && strings.HasPrefix(path, "/api/v1/apps/") && strings.HasSuffix(path, "/reviews") {
+		return "reviews:write"
+	}
+	if strings.HasPrefix(path, "/api/v1/reviews/") {
+		if strings.HasSuffix(path, "/like") && (method == http.MethodPost || method == http.MethodDelete) {
+			return "reviews:like"
+		}
+		if strings.HasSuffix(path, "/replies") && method == http.MethodPost {
+			return "reviews:write"
+		}
+		if method == http.MethodPatch || method == http.MethodDelete {
+			return "reviews:write"
+		}
+	}
+	return ""
+}
+
 func (r *Router) requireAdmin(w http.ResponseWriter, req *http.Request, roles ...string) (*account.User, bool) {
-	user, _, ok := r.requireAuth(w, req)
+	user, session, ok := r.requireAuth(w, req)
 	if !ok {
+		return nil, false
+	}
+	if session.AuthKind != "web" {
+		writeError(w, http.StatusForbidden, "web_session_required")
 		return nil, false
 	}
 	if len(roles) == 0 {
@@ -473,7 +516,14 @@ func (r *Router) requireUsers(w http.ResponseWriter) bool {
 func decodeJSON(w http.ResponseWriter, req *http.Request, dest any) bool {
 	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 	defer req.Body.Close()
-	if err := json.NewDecoder(req.Body).Decode(dest); err != nil {
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dest); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json")
+		return false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		writeError(w, http.StatusBadRequest, "invalid_json")
 		return false
 	}
@@ -500,12 +550,12 @@ func writeAccountError(w http.ResponseWriter, err error) {
 }
 
 func sessionToken(req *http.Request) string {
-	if cookie, err := req.Cookie("legacystore_session"); err == nil {
-		return cookie.Value
-	}
 	header := req.Header.Get("Authorization")
 	if strings.HasPrefix(header, "Bearer ") {
 		return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+	}
+	if cookie, err := req.Cookie("legacystore_session"); err == nil {
+		return cookie.Value
 	}
 	return ""
 }
@@ -517,7 +567,7 @@ func setSessionCookie(w http.ResponseWriter, req *http.Request, token string, ex
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(req),
+		Secure:   true,
 	}
 	if remember {
 		cookie.Expires = expiresAt
@@ -534,7 +584,7 @@ func clearSessionCookie(w http.ResponseWriter, req *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(req),
+		Secure:   true,
 	})
 }
 
@@ -548,20 +598,22 @@ func pathID(w http.ResponseWriter, req *http.Request, name string) (int64, bool)
 }
 
 func clientIP(req *http.Request) net.IP {
-	if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
-		first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		if ip := net.ParseIP(first); ip != nil {
-			return ip
+	if strings.EqualFold(os.Getenv("TRUST_PROXY_HEADERS"), "true") {
+		if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
+			first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+			if ip := net.ParseIP(first); ip != nil {
+				return ip
+			}
 		}
-	}
-	if real := req.Header.Get("X-Real-IP"); real != "" {
-		if ip := net.ParseIP(real); ip != nil {
-			return ip
+		if real := req.Header.Get("X-Real-IP"); real != "" {
+			if ip := net.ParseIP(real); ip != nil {
+				return ip
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
-	if err != nil {
-		return nil
+	if err == nil {
+		return net.ParseIP(host)
 	}
-	return net.ParseIP(host)
+	return net.ParseIP(req.RemoteAddr)
 }

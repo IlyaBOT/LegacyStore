@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"net"
@@ -62,8 +63,15 @@ func (s *Store) ResetLegacyPassword(ctx context.Context, userID, legacyPasswordI
 	}
 	token := "ls_" + secret
 	prefix := token[:10]
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback()
+
 	var item LegacyPassword
-	err = s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		UPDATE legacy_passwords
 		SET token_hash = $3, token_prefix = $4, last_used_at = NULL
 		WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
@@ -72,11 +80,30 @@ func (s *Store) ResetLegacyPassword(ctx context.Context, userID, legacyPasswordI
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}
-	return &item, token, err
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE sessions
+		SET revoked_at = now()
+		WHERE user_id = $1 AND legacy_password_id = $2 AND revoked_at IS NULL
+	`, userID, legacyPasswordID); err != nil {
+		return nil, "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "", err
+	}
+	return &item, token, nil
 }
 
 func (s *Store) DeleteLegacyPassword(ctx context.Context, userID, legacyPasswordID int64) error {
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
 		UPDATE legacy_passwords
 		SET revoked_at = now()
 		WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
@@ -87,15 +114,35 @@ func (s *Store) DeleteLegacyPassword(ctx context.Context, userID, legacyPassword
 	if n, _ := result.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE sessions
+		SET revoked_at = now()
+		WHERE user_id = $1 AND legacy_password_id = $2 AND revoked_at IS NULL
+	`, userID, legacyPasswordID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE legacy_devices
+		SET revoked_at = now()
+		WHERE user_id = $1 AND legacy_password_id = $2 AND revoked_at IS NULL
+	`, userID, legacyPasswordID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) LegacyLogin(ctx context.Context, email, legacyPassword, deviceIdentifier, deviceName string, ip net.IP, userAgent string) (*AuthResult, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
+	deviceIdentifier = strings.TrimSpace(deviceIdentifier)
+	deviceName = strings.TrimSpace(deviceName)
+	if email == "" || legacyPassword == "" || deviceIdentifier == "" {
+		return nil, ErrInvalidCredential
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.id, u.email, COALESCE(u.nickname, ''), COALESCE(u.avatar_url, ''), u.email_verified,
 		       u.two_factor_enabled, u.status, u.created_at::text, u.updated_at::text,
-		       lp.id, lp.token_hash
+		       lp.id, lp.token_hash, lp.scopes
 		FROM users u
 		JOIN legacy_passwords lp ON lp.user_id = u.id
 		WHERE lower(u.email) = $1 AND lp.revoked_at IS NULL AND u.status = 'active'
@@ -105,20 +152,37 @@ func (s *Store) LegacyLogin(ctx context.Context, email, legacyPassword, deviceId
 		return nil, err
 	}
 	defer rows.Close()
+
 	var user User
 	var legacyID int64
+	var legacyScopes []string
 	wantHash := tokenHash(legacyPassword)
 	found := false
 	for rows.Next() {
 		var candidate User
 		var candidateLegacyID int64
 		var storedHash string
-		if err := rows.Scan(&candidate.ID, &candidate.Email, &candidate.Nickname, &candidate.AvatarURL, &candidate.EmailVerified, &candidate.TwoFactorEnabled, &candidate.Status, &candidate.CreatedAt, &candidate.UpdatedAt, &candidateLegacyID, &storedHash); err != nil {
+		var candidateScopes []string
+		if err := rows.Scan(
+			&candidate.ID,
+			&candidate.Email,
+			&candidate.Nickname,
+			&candidate.AvatarURL,
+			&candidate.EmailVerified,
+			&candidate.TwoFactorEnabled,
+			&candidate.Status,
+			&candidate.CreatedAt,
+			&candidate.UpdatedAt,
+			&candidateLegacyID,
+			&storedHash,
+			pq.Array(&candidateScopes),
+		); err != nil {
 			return nil, err
 		}
-		if storedHash == wantHash {
+		if subtle.ConstantTimeCompare([]byte(storedHash), []byte(wantHash)) == 1 {
 			user = candidate
 			legacyID = candidateLegacyID
+			legacyScopes = append([]string(nil), candidateScopes...)
 			found = true
 			break
 		}
@@ -129,6 +193,7 @@ func (s *Store) LegacyLogin(ctx context.Context, email, legacyPassword, deviceId
 	if !found {
 		return nil, ErrInvalidCredential
 	}
+
 	roles, err := s.roles(ctx, user.ID)
 	if err != nil {
 		return nil, err
@@ -140,14 +205,26 @@ func (s *Store) LegacyLogin(ctx context.Context, email, legacyPassword, deviceId
 		return nil, err
 	}
 	defer tx.Rollback()
-	token, expiresAt, err := createSession(ctx, tx, user.ID, true, ip, userAgent)
+
+	if err := upsertLegacyDevice(ctx, tx, user.ID, legacyID, deviceIdentifier, deviceName, ip, userAgent); err != nil {
+		return nil, err
+	}
+	token, expiresAt, err := createScopedSession(
+		ctx,
+		tx,
+		user.ID,
+		true,
+		ip,
+		userAgent,
+		"legacy",
+		legacyScopes,
+		legacyID,
+		deviceIdentifier,
+	)
 	if err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE legacy_passwords SET last_used_at = now() WHERE id = $1`, legacyID); err != nil {
-		return nil, err
-	}
-	if err := upsertLegacyDevice(ctx, tx, user.ID, legacyID, deviceIdentifier, deviceName, ip, userAgent); err != nil {
 		return nil, err
 	}
 	if err := auditTx(ctx, tx, user.ID, "auth.legacy_login", "legacy_password", intString(legacyID), ip, userAgent); err != nil {
@@ -183,32 +260,48 @@ func (s *Store) ListLegacyDevices(ctx context.Context, userID int64) ([]LegacyDe
 }
 
 func (s *Store) RevokeLegacyDevice(ctx context.Context, userID, deviceID int64) error {
-	result, err := s.db.ExecContext(ctx, `
-		UPDATE legacy_devices
-		SET revoked_at = now()
-		WHERE id = $1 AND user_id = $2
-	`, deviceID, userID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
+	defer tx.Rollback()
+
+	var identifier string
+	err = tx.QueryRowContext(ctx, `
+		UPDATE legacy_devices
+		SET revoked_at = now()
+		WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+		RETURNING COALESCE(device_identifier, '')
+	`, deviceID, userID).Scan(&identifier)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	if identifier != "" {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE sessions
+			SET revoked_at = now()
+			WHERE user_id = $1
+			  AND auth_kind = 'legacy'
+			  AND legacy_device_identifier = $2
+			  AND revoked_at IS NULL
+		`, userID, identifier); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func upsertLegacyDevice(ctx context.Context, tx *sql.Tx, userID, legacyID int64, identifier, name string, ip net.IP, userAgent string) error {
 	identifier = strings.TrimSpace(identifier)
 	name = strings.TrimSpace(name)
+	if identifier == "" {
+		return ErrInvalidCredential
+	}
 	if name == "" {
 		name = "Legacy Mac"
-	}
-	if identifier == "" {
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO legacy_devices (user_id, legacy_password_id, device_name, last_ip, last_user_agent)
-			VALUES ($1, $2, $3, $4, $5)
-		`, userID, legacyID, name, nullableIP(ip), truncate(userAgent, 512))
-		return err
 	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO legacy_devices (user_id, legacy_password_id, device_identifier, device_name, last_ip, last_user_agent)
@@ -225,15 +318,17 @@ func upsertLegacyDevice(ctx context.Context, tx *sql.Tx, userID, legacyID int64,
 }
 
 func sanitizeLegacyScopes(scopes []string) []string {
-	allowed := map[string]bool{}
+	allowed := make(map[string]bool, len(defaultLegacyScopes))
 	for _, scope := range defaultLegacyScopes {
 		allowed[scope] = true
 	}
-	var clean []string
+	seen := make(map[string]bool, len(scopes))
+	clean := make([]string, 0, len(scopes))
 	for _, scope := range scopes {
 		scope = strings.TrimSpace(scope)
-		if allowed[scope] {
+		if allowed[scope] && !seen[scope] {
 			clean = append(clean, scope)
+			seen[scope] = true
 		}
 	}
 	if len(clean) == 0 {

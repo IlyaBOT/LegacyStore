@@ -12,9 +12,13 @@ import (
 )
 
 const (
-	passwordIterations = 210000
+	passwordIterations = 600000
 	passwordSaltBytes  = 16
 	passwordKeyBytes   = 32
+
+	// Used only to perform comparable work when a login email does not exist.
+	// It is not a credential for any account.
+	dummyPasswordHash = "pbkdf2_sha256$600000$bGVnYWN5c3RvcmUtZHVtbXktYXV0aC1zYWx0LTIwMjY$Pf+Bbo/sxBbdn+IreP3jG+Nxr8ZiEN32EdET104FOOc"
 )
 
 func hashPassword(password string) (string, error) {
@@ -36,7 +40,7 @@ func verifyPassword(encoded, password string) bool {
 		return false
 	}
 	iterations, err := strconv.Atoi(parts[1])
-	if err != nil || iterations < 100000 {
+	if err != nil || iterations < 100000 || iterations > 2000000 {
 		return false
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[2])
@@ -44,7 +48,7 @@ func verifyPassword(encoded, password string) bool {
 		return false
 	}
 	want, err := base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil {
+	if err != nil || len(want) < 16 || len(want) > 64 {
 		return false
 	}
 	got := pbkdf2SHA256([]byte(password), salt, iterations, len(want))

@@ -4,31 +4,42 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"legacystore/backend/internal/account"
 	"legacystore/backend/internal/catalog"
+	"legacystore/backend/internal/catalogsign"
 	"legacystore/backend/internal/compatibility"
 	"legacystore/backend/internal/config"
 )
 
 type Router struct {
-	mux   *http.ServeMux
-	cfg   config.Config
-	store *catalog.Store
-	users *account.Store
+	mux    *http.ServeMux
+	cfg    config.Config
+	store  *catalog.Store
+	users  *account.Store
+	signer *catalogsign.Signer
 }
 
 func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) http.Handler {
+	return NewRouterWithSigner(cfg, store, users, nil)
+}
+
+func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account.Store, signer *catalogsign.Signer) http.Handler {
 	r := &Router{
-		mux:   http.NewServeMux(),
-		cfg:   cfg,
-		store: store,
-		users: users,
+		mux:    http.NewServeMux(),
+		cfg:    cfg,
+		store:  store,
+		users:  users,
+		signer: signer,
 	}
 
 	r.mux.HandleFunc("GET /healthz", r.health)
 	r.mux.HandleFunc("GET /api/v1/bootstrap", r.bootstrap)
+	r.mux.HandleFunc("GET /api/v1/catalog/manifest", r.catalogManifest)
+	r.mux.HandleFunc("GET /api/v1/catalog/public-key", r.catalogPublicKey)
 	r.mux.HandleFunc("GET /api/v1/categories", r.categories)
 	r.mux.HandleFunc("GET /api/v1/apps", r.apps)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}", r.appDetail)
@@ -36,19 +47,27 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}/reviews", r.appReviews)
 	r.mux.HandleFunc("GET /api/v1/search", r.search)
 	r.mux.HandleFunc("GET /api/v1/download/{artifact_id}", r.download)
-	r.mux.HandleFunc("POST /api/v1/auth/login", r.login)
+	r.mux.HandleFunc("GET /api/v1/files/{artifact_id}", r.localArtifactFile)
+
+	r.mux.HandleFunc("POST /api/v1/auth/login", r.loginV2)
 	r.mux.HandleFunc("POST /api/v1/auth/register", r.register)
 	r.mux.HandleFunc("POST /api/v1/auth/logout", r.logout)
 	r.mux.HandleFunc("POST /api/v1/auth/refresh", r.refresh)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/setup", r.setup2FA)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/verify", r.verify2FA)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/disable", r.disable2FA)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/setup", r.setup2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/verify", r.verify2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/disable", r.disable2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/recovery-codes/regenerate", r.regenerate2FARecoveryCodes)
+	r.mux.HandleFunc("POST /api/v1/auth/recovery/request", r.requestPasswordRecovery)
+	r.mux.HandleFunc("POST /api/v1/auth/recovery/reset", r.resetPasswordRecovery)
 	r.mux.HandleFunc("POST /api/v1/auth/oauth/google", r.authNotAvailable)
 	r.mux.HandleFunc("POST /api/v1/auth/oauth/apple", r.authNotAvailable)
 	r.mux.HandleFunc("POST /api/v1/auth/legacy/login", r.legacyLogin)
+
 	r.mux.HandleFunc("GET /api/v1/me", r.me)
 	r.mux.HandleFunc("PATCH /api/v1/me", r.updateMe)
 	r.mux.HandleFunc("POST /api/v1/me/avatar", r.updateMe)
+	r.mux.HandleFunc("POST /api/v1/me/password", r.changePassword)
+	r.mux.HandleFunc("POST /api/v1/me/email", r.changeEmail)
 	r.mux.HandleFunc("GET /api/v1/me/sessions", r.sessions)
 	r.mux.HandleFunc("DELETE /api/v1/me/sessions/{id}", r.revokeSession)
 	r.mux.HandleFunc("GET /api/v1/me/legacy-passwords", r.legacyPasswords)
@@ -57,27 +76,52 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 	r.mux.HandleFunc("DELETE /api/v1/me/legacy-passwords/{id}", r.deleteLegacyPassword)
 	r.mux.HandleFunc("GET /api/v1/me/devices", r.devices)
 	r.mux.HandleFunc("DELETE /api/v1/me/devices/{id}", r.revokeDevice)
+
 	r.mux.HandleFunc("POST /api/v1/apps/{slug}/reviews", r.createReview)
 	r.mux.HandleFunc("PATCH /api/v1/reviews/{id}", r.updateReview)
 	r.mux.HandleFunc("DELETE /api/v1/reviews/{id}", r.deleteReview)
 	r.mux.HandleFunc("POST /api/v1/reviews/{id}/like", r.likeReview)
 	r.mux.HandleFunc("DELETE /api/v1/reviews/{id}/like", r.unlikeReview)
 	r.mux.HandleFunc("POST /api/v1/reviews/{id}/replies", r.createReviewReply)
+
 	r.mux.HandleFunc("GET /api/v1/admin/dashboard", r.adminDashboard)
 	r.mux.HandleFunc("GET /api/v1/admin/users", r.adminUsers)
 	r.mux.HandleFunc("PATCH /api/v1/admin/users/{id}", r.adminUpdateUser)
 	r.mux.HandleFunc("POST /api/v1/admin/users/{id}/roles", r.adminAddRole)
 	r.mux.HandleFunc("DELETE /api/v1/admin/users/{id}/roles/{role}", r.adminRemoveRole)
+
 	r.mux.HandleFunc("GET /api/v1/admin/apps", r.adminApps)
 	r.mux.HandleFunc("POST /api/v1/admin/apps", r.adminCreateApp)
 	r.mux.HandleFunc("PATCH /api/v1/admin/apps/{id}", r.adminUpdateApp)
 	r.mux.HandleFunc("DELETE /api/v1/admin/apps/{id}", r.adminDeleteApp)
+	r.mux.HandleFunc("GET /api/v1/admin/apps/{id}/versions", r.adminVersions)
+	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/versions", r.adminCreateVersion)
+	r.mux.HandleFunc("PATCH /api/v1/admin/versions/{id}", r.adminUpdateVersion)
+	r.mux.HandleFunc("DELETE /api/v1/admin/versions/{id}", r.adminDeleteVersion)
+
+	r.mux.HandleFunc("GET /api/v1/admin/versions/{id}/artifacts", r.adminArtifacts)
+	r.mux.HandleFunc("POST /api/v1/admin/versions/{id}/artifacts", r.adminCreateArtifact)
+	r.mux.HandleFunc("POST /api/v1/admin/versions/{id}/upload", r.adminUploadArtifact)
+	r.mux.HandleFunc("PATCH /api/v1/admin/artifacts/{id}", r.adminUpdateArtifact)
+	r.mux.HandleFunc("DELETE /api/v1/admin/artifacts/{id}", r.adminDeleteArtifact)
+
+	r.mux.HandleFunc("GET /api/v1/admin/artifacts/{id}/mirrors", r.adminMirrors)
+	r.mux.HandleFunc("POST /api/v1/admin/artifacts/{id}/mirrors", r.adminCreateMirror)
+	r.mux.HandleFunc("PATCH /api/v1/admin/mirrors/{id}", r.adminUpdateMirror)
+	r.mux.HandleFunc("DELETE /api/v1/admin/mirrors/{id}", r.adminDeleteMirror)
+
+	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/icons", r.adminCreateIcon)
+	r.mux.HandleFunc("DELETE /api/v1/admin/icons/{id}", r.adminDeleteIcon)
+	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/screenshots", r.adminCreateScreenshot)
+	r.mux.HandleFunc("PATCH /api/v1/admin/screenshots/{id}", r.adminUpdateScreenshot)
+	r.mux.HandleFunc("DELETE /api/v1/admin/screenshots/{id}", r.adminDeleteScreenshot)
+
 	r.mux.HandleFunc("GET /api/v1/admin/moderation", r.adminModeration)
 	r.mux.HandleFunc("POST /api/v1/admin/moderation/{id}/approve", r.adminApprove)
 	r.mux.HandleFunc("POST /api/v1/admin/moderation/{id}/reject", r.adminReject)
 	r.mux.HandleFunc("GET /api/v1/admin/audit-log", r.adminAuditLog)
-	r.mux.HandleFunc("/", r.notFound)
 
+	r.mux.HandleFunc("/", r.notFound)
 	return r
 }
 
@@ -109,12 +153,12 @@ func (r *Router) apps(w http.ResponseWriter, req *http.Request) {
 	if !r.requireStore(w) {
 		return
 	}
-	apps, err := r.store.Apps(req.Context(), r.filters(req, false))
+	filters := r.filters(req, false)
+	apps, err := r.store.Apps(req.Context(), filters)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "apps_failed")
 		return
 	}
-	filters := r.filters(req, false)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"page":  filters.Page,
 		"limit": filters.Limit,
@@ -206,6 +250,9 @@ func (r *Router) download(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusInternalServerError, "download_metadata_failed")
 		return
 	}
+	if metadata.SourceType == "local" {
+		metadata.DownloadURL = strings.TrimRight(r.cfg.PublicBaseURL, "/") + "/api/v1/files/" + strconv.FormatInt(artifactID, 10)
+	}
 	writeJSON(w, http.StatusOK, metadata)
 }
 
@@ -280,7 +327,13 @@ func writeError(w http.ResponseWriter, status int, code string) {
 }
 
 func isSecureRequest(req *http.Request) bool {
-	return req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https"
+	if req.TLS != nil {
+		return true
+	}
+	if strings.EqualFold(os.Getenv("TRUST_PROXY_HEADERS"), "true") && strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

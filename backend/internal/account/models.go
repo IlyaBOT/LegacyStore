@@ -28,14 +28,18 @@ type User struct {
 }
 
 type Session struct {
-	ID         int64  `json:"id"`
-	DeviceName string `json:"device_name,omitempty"`
-	IPAddress  string `json:"ip_address,omitempty"`
-	UserAgent  string `json:"user_agent,omitempty"`
-	RememberMe bool   `json:"remember_me"`
-	ExpiresAt  string `json:"expires_at"`
-	LastSeenAt string `json:"last_seen_at"`
-	CreatedAt  string `json:"created_at"`
+	ID                     int64    `json:"id"`
+	DeviceName             string   `json:"device_name,omitempty"`
+	IPAddress              string   `json:"ip_address,omitempty"`
+	UserAgent              string   `json:"user_agent,omitempty"`
+	RememberMe             bool     `json:"remember_me"`
+	AuthKind               string   `json:"auth_kind"`
+	Scopes                 []string `json:"scopes,omitempty"`
+	LegacyPasswordID       int64    `json:"legacy_password_id,omitempty"`
+	LegacyDeviceIdentifier string   `json:"legacy_device_identifier,omitempty"`
+	ExpiresAt              string   `json:"expires_at"`
+	LastSeenAt             string   `json:"last_seen_at"`
+	CreatedAt              string   `json:"created_at"`
 }
 
 type LegacyPassword struct {

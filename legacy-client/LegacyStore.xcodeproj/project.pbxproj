@@ -1,0 +1,233 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		100000000000000000000001 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* main.m */; };
+		100000000000000000000002 /* LSAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* LSAppDelegate.m */; };
+		100000000000000000000003 /* LSMainWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* LSMainWindowController.m */; };
+		100000000000000000000004 /* LSSystemInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* LSSystemInfo.m */; };
+		100000000000000000000005 /* LSJSONParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* LSJSONParser.m */; };
+		100000000000000000000006 /* LSAPIClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* LSAPIClient.m */; };
+		100000000000000000000007 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* Cocoa.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		200000000000000000000001 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		200000000000000000000002 /* LSAppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSAppDelegate.h; sourceTree = "<group>"; };
+		200000000000000000000003 /* LSAppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LSAppDelegate.m; sourceTree = "<group>"; };
+		200000000000000000000004 /* LSMainWindowController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSMainWindowController.h; sourceTree = "<group>"; };
+		200000000000000000000005 /* LSMainWindowController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LSMainWindowController.m; sourceTree = "<group>"; };
+		200000000000000000000006 /* LSSystemInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSSystemInfo.h; sourceTree = "<group>"; };
+		200000000000000000000007 /* LSSystemInfo.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LSSystemInfo.m; sourceTree = "<group>"; };
+		200000000000000000000008 /* LSJSONParser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSJSONParser.h; sourceTree = "<group>"; };
+		200000000000000000000009 /* LSJSONParser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LSJSONParser.m; sourceTree = "<group>"; };
+		20000000000000000000000A /* LSAPIClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSAPIClient.h; sourceTree = "<group>"; };
+		20000000000000000000000B /* LSAPIClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LSAPIClient.m; sourceTree = "<group>"; };
+		20000000000000000000000C /* LSCompatibility.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LSCompatibility.h; sourceTree = "<group>"; };
+		20000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20000000000000000000000E /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
+		20000000000000000000000F /* LegacyStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LegacyStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		300000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000007 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		400000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000002 /* LegacyStore */,
+				400000000000000000000003 /* Frameworks */,
+				400000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		400000000000000000000002 /* LegacyStore */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000001 /* main.m */,
+				200000000000000000000002 /* LSAppDelegate.h */,
+				200000000000000000000003 /* LSAppDelegate.m */,
+				200000000000000000000004 /* LSMainWindowController.h */,
+				200000000000000000000005 /* LSMainWindowController.m */,
+				200000000000000000000006 /* LSSystemInfo.h */,
+				200000000000000000000007 /* LSSystemInfo.m */,
+				200000000000000000000008 /* LSJSONParser.h */,
+				200000000000000000000009 /* LSJSONParser.m */,
+				20000000000000000000000A /* LSAPIClient.h */,
+				20000000000000000000000B /* LSAPIClient.m */,
+				20000000000000000000000C /* LSCompatibility.h */,
+				20000000000000000000000D /* Info.plist */,
+			);
+			path = LegacyStore;
+			sourceTree = "<group>";
+		};
+		400000000000000000000003 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000E /* Cocoa.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		400000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000F /* LegacyStore.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		500000000000000000000001 /* LegacyStore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 900000000000000000000002 /* Build configuration list for PBXNativeTarget "LegacyStore" */;
+			buildPhases = (
+				700000000000000000000001 /* Sources */,
+				300000000000000000000001 /* Frameworks */,
+				700000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LegacyStore;
+			productName = LegacyStore;
+			productReference = 20000000000000000000000F /* LegacyStore.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		600000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXProject "LegacyStore" */;
+			compatibilityVersion = "Xcode 3.2";
+			hasScannedForEncodings = 1;
+			mainGroup = 400000000000000000000001;
+			productRefGroup = 400000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				500000000000000000000001 /* LegacyStore */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		700000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		700000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000001 /* main.m in Sources */,
+				100000000000000000000002 /* LSAppDelegate.m in Sources */,
+				100000000000000000000003 /* LSMainWindowController.m in Sources */,
+				100000000000000000000004 /* LSSystemInfo.m in Sources */,
+				100000000000000000000005 /* LSJSONParser.m in Sources */,
+				100000000000000000000006 /* LSAPIClient.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		800000000000000000000001 /* Tiger i386 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = i386;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = macosx10.4u;
+			};
+			name = "Tiger i386";
+		};
+		800000000000000000000002 /* Leopard x86_64 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = x86_64;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = macosx10.5;
+			};
+			name = "Leopard x86_64";
+		};
+		800000000000000000000003 /* Tiger i386 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = i386;
+				INFOPLIST_FILE = LegacyStore/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				PRODUCT_NAME = LegacyStore;
+				SDKROOT = macosx10.4u;
+				VALID_ARCHS = "i386 x86_64";
+			};
+			name = "Tiger i386";
+		};
+		800000000000000000000004 /* Leopard x86_64 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = x86_64;
+				INFOPLIST_FILE = LegacyStore/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				PRODUCT_NAME = LegacyStore;
+				SDKROOT = macosx10.5;
+				VALID_ARCHS = "i386 x86_64";
+			};
+			name = "Leopard x86_64";
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		900000000000000000000001 /* Build configuration list for PBXProject "LegacyStore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				800000000000000000000001 /* Tiger i386 */,
+				800000000000000000000002 /* Leopard x86_64 */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Tiger i386";
+		};
+		900000000000000000000002 /* Build configuration list for PBXNativeTarget "LegacyStore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				800000000000000000000003 /* Tiger i386 */,
+				800000000000000000000004 /* Leopard x86_64 */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Tiger i386";
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 600000000000000000000001 /* Project object */;
+}
