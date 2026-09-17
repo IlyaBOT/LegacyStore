@@ -77,6 +77,24 @@ api_request() {
   printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
 }
 
+multipart_upload() {
+  MU_PATH=$1
+  MU_TOKEN=$2
+  MU_FILE=$3
+  shift 3
+
+  set -- curl -sS -o "$BODY_FILE" -D "$HEADERS_FILE" -w '%{http_code}' \
+    -X POST \
+    -H 'X-Forwarded-Proto: https' \
+    -H "Authorization: Bearer $MU_TOKEN" \
+    -F "file=@$MU_FILE"
+  for MU_FIELD in "$@"; do
+    set -- "$@" -F "$MU_FIELD"
+  done
+  HTTP_STATUS=$("$@" "$BASE_URL$MU_PATH")
+  printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
+}
+
 status_is() {
   [ "$(cat "$STATUS_FILE")" = "$1" ]
 }
