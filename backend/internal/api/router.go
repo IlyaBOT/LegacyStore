@@ -41,6 +41,7 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("GET /api/v1/catalog/manifest", r.catalogManifest)
 	r.mux.HandleFunc("GET /api/v1/catalog/public-key", r.catalogPublicKey)
 	r.mux.HandleFunc("GET /api/v1/categories", r.categories)
+	r.mux.HandleFunc("GET /api/v1/home", r.home)
 	r.mux.HandleFunc("GET /api/v1/apps", r.apps)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}", r.appDetail)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}/versions", r.appVersions)
@@ -152,6 +153,18 @@ func (r *Router) categories(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"categories": categories})
 }
 
+func (r *Router) home(w http.ResponseWriter, req *http.Request) {
+	if !r.requireStore(w) {
+		return
+	}
+	feed, err := r.store.Home(req.Context(), targetFromRequest(req))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "home_failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, feed)
+}
+
 func (r *Router) apps(w http.ResponseWriter, req *http.Request) {
 	if !r.requireStore(w) {
 		return
@@ -253,6 +266,9 @@ func (r *Router) download(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusInternalServerError, "download_metadata_failed")
 		return
 	}
+	// Count a download intent once when metadata is requested. Counting here
+	// avoids multiplying local downloads by HTTP range requests.
+	_ = r.store.RecordDownload(req.Context(), artifactID)
 	if metadata.SourceType == "local" {
 		metadata.DownloadURL = strings.TrimRight(r.cfg.PublicBaseURL, "/") + "/api/v1/files/" + strconv.FormatInt(artifactID, 10)
 	}
@@ -293,6 +309,7 @@ func (r *Router) filters(req *http.Request, useSearchQuery bool) catalog.Filters
 		Page:           intParam(values.Get("page"), 1),
 		Limit:          intParam(values.Get("limit"), 24),
 		Category:       values.Get("category"),
+		Sort:           values.Get("sort"),
 		Target:         targetFromRequest(req),
 		CompatibleOnly: boolParam(values.Get("compatible")),
 	}
