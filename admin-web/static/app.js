@@ -14,6 +14,7 @@
     pendingTwoFactorLogin: null,
     twoFactorSetup: null,
     recoveryCodes: [],
+    carouselTimer: null,
     uploadContext: { appId: "", versionId: "", file: null, inspection: null, iconDataURL: "" }
   };
 
@@ -328,10 +329,13 @@
     return "os=" + encodeURIComponent(state.os || "10.9") + "&arch=" + encodeURIComponent(state.arch) + "&os_series=1";
   }
 
-  function loadApps(category, limit) {
+  function loadApps(category, limit, sortMode) {
     var path = "/apps?" + queryTarget() + "&limit=" + encodeURIComponent(limit || 24) + "&page=1";
     if (category) {
       path += "&category=" + encodeURIComponent(category);
+    }
+    if (sortMode) {
+      path += "&sort=" + encodeURIComponent(sortMode);
     }
     return api(path).then(function (payload) { return payload.apps || []; });
   }
@@ -392,30 +396,135 @@
       '<div class="app-strip">' + (body || '<div class="empty-state">No items</div>') + "</div></section>";
   }
 
+  function finderMarkHTML() {
+    return '<div class="finder-mark" aria-hidden="true"><svg viewBox="0 0 180 180">' +
+      '<defs><linearGradient id="finderLeft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dc2ff"/><stop offset="1" stop-color="#1870cf"/></linearGradient>' +
+      '<linearGradient id="finderRight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf6ff"/><stop offset="1" stop-color="#92caf5"/></linearGradient></defs>' +
+      '<rect x="8" y="8" width="164" height="164" rx="24" fill="url(#finderRight)"/><path d="M8 8h80l-18 66 22 98H32c-13 0-24-11-24-24V8Z" fill="url(#finderLeft)"/>' +
+      '<path d="M88 8v164" stroke="#275d9a" stroke-width="4"/><path d="M47 67c8-7 17-7 25 0M110 67c8-7 17-7 25 0" fill="none" stroke="#173a64" stroke-width="6" stroke-linecap="round"/>' +
+      '<path d="M58 118c20 17 45 20 68 1" fill="none" stroke="#173a64" stroke-width="6" stroke-linecap="round"/></svg></div>';
+  }
+
+  function welcomeSlideHTML() {
+    return '<article class="home-carousel-slide is-welcome" data-carousel-slide>' +
+      '<img class="home-carousel-art" data-home-carousel-img src="/assets/catalog-hero.png" alt="">' +
+      '<div class="home-carousel-shade"></div><div class="home-carousel-content"><span class="carousel-eyebrow">LegacyStore</span>' +
+      '<h1>Welcome to Legacy Store!</h1><p>Classic software catalog for old Intel Macs.</p>' +
+      '<button class="blue-button" data-route="catalog" type="button">Browse Applications</button></div></article>';
+  }
+
+  function emptyCatalogSlideHTML() {
+    return '<article class="home-carousel-slide is-empty" data-carousel-slide>' + finderMarkHTML() +
+      '<div class="home-carousel-content"><span class="carousel-eyebrow">Fresh installation</span>' +
+      '<h1>No applications yet</h1><p>The apps haven\'t been uploaded yet. Maybe you\'re a developer and just started this Legacy Store instance, huh? ;-)</p>' +
+      '<button class="blue-button" data-route="uploads" type="button">Upload Application</button></div></article>';
+  }
+
+  function appCarouselSlideHTML(slide) {
+    var app = (slide && slide.app) || {};
+    var image = app.hero_image || app.icon || "";
+    return '<article class="home-carousel-slide is-app" data-carousel-slide>' +
+      (image ? '<img class="home-carousel-art app-art" data-home-carousel-img src="' + escapeHTML(image) + '" alt="">' : "") +
+      '<div class="home-carousel-shade"></div><div class="home-carousel-content"><span class="carousel-eyebrow">' +
+      escapeHTML(slide.metric || "Featured") + '</span><h1>' + escapeHTML(app.name || "Application") + '</h1><p>' +
+      escapeHTML(app.summary || "") + '</p><button class="blue-button" data-route="app/' + escapeHTML(app.slug || "") +
+      '" type="button">View Application</button></div></article>';
+  }
+
+  function stopHomeCarousel() {
+    if (state.carouselTimer) {
+      window.clearInterval(state.carouselTimer);
+      state.carouselTimer = null;
+    }
+  }
+
+  function bindHomeCarousel() {
+    stopHomeCarousel();
+    var carousel = document.getElementById("homeCarousel");
+    if (!carousel) { return; }
+    var track = carousel.querySelector("[data-carousel-track]");
+    var slides = Array.prototype.slice.call(carousel.querySelectorAll("[data-carousel-slide]"));
+    var dots = Array.prototype.slice.call(carousel.querySelectorAll("[data-carousel-index]"));
+    if (!track || !slides.length) { return; }
+
+    var current = 0;
+    function activate(index) {
+      current = (index + slides.length) % slides.length;
+      track.style.transform = "translateX(-" + (current * 100) + "%)";
+      slides.forEach(function (slide, position) {
+        slide.classList.toggle("is-active", position === current);
+        slide.setAttribute("aria-hidden", position === current ? "false" : "true");
+      });
+      dots.forEach(function (dot, position) {
+        dot.classList.toggle("is-active", position === current);
+        dot.setAttribute("aria-current", position === current ? "true" : "false");
+      });
+    }
+
+    dots.forEach(function (dot) {
+      dot.addEventListener("click", function () {
+        activate(Number(dot.getAttribute("data-carousel-index") || 0));
+      });
+    });
+
+    function start() {
+      stopHomeCarousel();
+      if (slides.length > 1) {
+        state.carouselTimer = window.setInterval(function () { activate(current + 1); }, 6000);
+      }
+    }
+    carousel.addEventListener("mouseenter", stopHomeCarousel);
+    carousel.addEventListener("mouseleave", start);
+    carousel.addEventListener("focusin", stopHomeCarousel);
+    carousel.addEventListener("focusout", start);
+
+    carousel.querySelectorAll("[data-home-carousel-img]").forEach(function (image) {
+      image.addEventListener("error", function () { image.classList.add("is-broken"); }, { once: true });
+      if (image.complete && image.naturalWidth === 0) { image.classList.add("is-broken"); }
+    });
+
+    activate(0);
+    start();
+  }
+
+  function homeCarouselHTML(serverSlides) {
+    var slides = [welcomeSlideHTML()];
+    if (serverSlides && serverSlides.length) {
+      serverSlides.forEach(function (slide) { slides.push(appCarouselSlideHTML(slide)); });
+    } else {
+      slides.push(emptyCatalogSlideHTML());
+    }
+    var dots = slides.map(function (_, index) {
+      return '<button class="home-carousel-dot' + (index === 0 ? " is-active" : "") +
+        '" data-carousel-index="' + index + '" type="button" aria-label="Show slide ' + (index + 1) + '"></button>';
+    }).join("");
+    return '<section class="home-carousel" id="homeCarousel"><div class="home-carousel-track" data-carousel-track>' +
+      slides.join("") + '</div><div class="home-carousel-dots">' + dots + '</div></section>';
+  }
+
   function renderHome() {
     state.category = "";
     main.innerHTML = '<div class="loading">Loading...</div>';
-    Promise.all([loadApps("", 12), loadApps("graphics-design", 6)]).then(function (sets) {
-      state.apps = sets[0];
-      var featured = state.apps.find(function (app) { return app.slug === "pixelmator"; }) || state.apps[0] || {};
-      main.innerHTML = '<section class="hero"><div class="hero-content"><h1>' + escapeHTML(featured.name || "LegacyStore") + "</h1><p>" +
-        escapeHTML(featured.summary || "Classic software catalog for old Intel Macs.") + '</p><button class="blue-button" data-route="app/' +
-        escapeHTML(featured.slug || "pixelmator") + '" type="button">View Application</button></div></section>' +
-        panel("New and Noteworthy", "catalog", sets[0].slice(0, 6).map(appCard).join("")) +
-        panel("Graphics & Design", "category/graphics-design", sets[1].slice(0, 6).map(appCard).join(""));
+    api("/home?" + queryTarget()).then(function (feed) {
+      state.apps = feed.popular || [];
+      main.innerHTML = homeCarouselHTML(feed.slides || []) +
+        panel("Popular", "top-charts", (feed.popular || []).map(appCard).join("")) +
+        panel("Top Downloads", "catalog?sort=downloads", (feed.top_downloads || []).map(appCard).join("")) +
+        panel("New Releases", "catalog?sort=new", (feed.new_releases || []).map(appCard).join(""));
       bindRouteButtons(main);
       bindImageFallbacks(main);
-      setStatus("Showing: Featured", state.apps.length + " items", "Sort By: Featured");
+      bindHomeCarousel();
+      setStatus("Showing: Featured", "", "Server-ranked selections");
       renderSidebar();
     }).catch(renderError);
   }
 
-  function renderCatalog(category) {
+  function renderCatalog(category, sortMode) {
     state.category = category || "";
     main.innerHTML = '<div class="loading">Loading...</div>';
-    loadApps(state.category, 50).then(function (apps) {
+    loadApps(state.category, 50, sortMode || "").then(function (apps) {
       state.apps = apps;
-      var title = categoryName(state.category) || "All Software";
+      var title = categoryName(state.category) || (sortMode === "downloads" ? "Top Downloads" : (sortMode === "new" ? "New Releases" : "All Software"));
       main.innerHTML = '<div class="view-title"><h1>' + escapeHTML(title) + "</h1>" + filtersHTML() + '</div><div class="app-list">' +
         (apps.length ? apps.map(appRow).join("") : '<div class="empty-state">No items</div>') + "</div>";
       bindRouteButtons(main);
@@ -665,11 +774,10 @@
   function renderTopCharts() {
     state.category = "";
     main.innerHTML = '<div class="loading">Loading...</div>';
-    loadApps("", 50).then(function (apps) {
-      apps.sort(function (a, b) { return Number(b.rating_count || 0) - Number(a.rating_count || 0); });
+    loadApps("", 50, "popular").then(function (apps) {
       main.innerHTML = '<div class="view-title"><h1>Top Charts</h1>' + filtersHTML() + '</div><div class="app-list">' + apps.map(appRow).join("") + "</div>";
       bindRouteButtons(main); bindFilters(); bindImageFallbacks(main);
-      setStatus("Showing: Top Charts", apps.length + " items", "Sort By: Rating");
+      setStatus("Showing: Top Charts", apps.length + " items", "Sort By: Popularity");
       renderSidebar();
     }).catch(renderError);
   }
@@ -1619,12 +1727,13 @@
     var parsed = parseRoute();
     state.route = parsed.route;
     state.routeParams = parsed.params;
+    stopHomeCarousel();
     main.classList.remove("is-auth");
     setActiveTabs();
 
     if (state.route === "home") { renderHome(); return; }
-    if (state.route === "catalog") { renderCatalog(""); return; }
-    if (state.route.indexOf("category/") === 0) { renderCatalog(state.route.split("/")[1]); return; }
+    if (state.route === "catalog") { renderCatalog("", parsed.params.get("sort") || ""); return; }
+    if (state.route.indexOf("category/") === 0) { renderCatalog(state.route.split("/")[1], ""); return; }
     if (state.route === "categories") { renderCategories(); return; }
     if (state.route === "search") { renderSearch(parsed.params.get("q") || ""); return; }
     if (state.route.indexOf("app/") === 0) { renderApp(state.route.split("/")[1]); return; }
