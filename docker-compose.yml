@@ -29,11 +29,15 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://legacystore:legacystore_dev_password@postgres:5432/legacystore?sslmode=disable}
       CATALOG_SIGNING_ENABLED: ${CATALOG_SIGNING_ENABLED:-false}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/data/storage}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-8589934592}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - ./backend:/app
       - ./build:/workspace/build
+      - storage_data:/data/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,3 +62,4 @@ services:
 
 volumes:
   postgres_data:
+  storage_data:
