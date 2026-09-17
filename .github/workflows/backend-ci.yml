@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'scripts/test_api.sh'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -42,3 +43,92 @@ jobs:
 
       - name: Build
         run: go build ./cmd/legacystore-backend
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: legacystore_test
+          POSTGRES_USER: legacystore
+          POSTGRES_PASSWORD: legacystore_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legacystore -d legacystore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://legacystore:legacystore_test_password@127.0.0.1:5432/legacystore_test?sslmode=disable
+      BACKEND_HOST: 127.0.0.1
+      BACKEND_PORT: 8080
+      PUBLIC_BASE_URL: http://127.0.0.1:8080
+      TRUST_PROXY_HEADERS: 'true'
+      CATALOG_SIGNING_ENABLED: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: backend/go.sum
+
+      - name: Install API test dependencies
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Apply migrations
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          for migration in migrations/*.up.sql; do
+            echo "Applying $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Load fixtures
+        working-directory: backend
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f fixtures/seed.sql
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          go run ./cmd/legacystore-backend >../backend-integration.log 2>&1 &
+          echo $! >../backend-integration.pid
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ../backend-integration.log
+          exit 1
+
+      - name: Run API integration tests
+        env:
+          BASE_URL: http://127.0.0.1:8080
+        run: ./scripts/test_api.sh
+
+      - name: Show backend log on failure
+        if: failure()
+        run: cat backend-integration.log || true
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f backend-integration.pid ]; then
+            kill "$(cat backend-integration.pid)" 2>/dev/null || true
+          fi
