@@ -321,7 +321,7 @@ func (r *Router) adminDeleteMirror(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateIcon(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
 	if !ok {
 		return
 	}
