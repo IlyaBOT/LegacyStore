@@ -38,6 +38,7 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}/reviews", r.appReviews)
 	r.mux.HandleFunc("GET /api/v1/search", r.search)
 	r.mux.HandleFunc("GET /api/v1/download/{artifact_id}", r.download)
+	r.mux.HandleFunc("GET /api/v1/files/{artifact_id}", r.localArtifactFile)
 
 	r.mux.HandleFunc("POST /api/v1/auth/login", r.login)
 	r.mux.HandleFunc("POST /api/v1/auth/register", r.register)
@@ -86,6 +87,7 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 
 	r.mux.HandleFunc("GET /api/v1/admin/versions/{id}/artifacts", r.adminArtifacts)
 	r.mux.HandleFunc("POST /api/v1/admin/versions/{id}/artifacts", r.adminCreateArtifact)
+	r.mux.HandleFunc("POST /api/v1/admin/versions/{id}/upload", r.adminUploadArtifact)
 	r.mux.HandleFunc("PATCH /api/v1/admin/artifacts/{id}", r.adminUpdateArtifact)
 	r.mux.HandleFunc("DELETE /api/v1/admin/artifacts/{id}", r.adminDeleteArtifact)
 
@@ -233,6 +235,9 @@ func (r *Router) download(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "download_metadata_failed")
 		return
+	}
+	if metadata.SourceType == "local" {
+		metadata.DownloadURL = strings.TrimRight(r.cfg.PublicBaseURL, "/") + "/api/v1/files/" + strconv.FormatInt(artifactID, 10)
 	}
 	writeJSON(w, http.StatusOK, metadata)
 }
