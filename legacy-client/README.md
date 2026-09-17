@@ -75,6 +75,23 @@ LEGACYSTORE_LEOPARD_SDK=/path/to/MacOSX10.5.sdk \
 ./scripts/build_client.sh
 ```
 
+## Snow Leopard validation
+
+After building, validate the generated bundle with:
+
+```sh
+chmod +x scripts/validate_client_build.sh
+./scripts/validate_client_build.sh
+```
+
+The complete minimal Xcode 3.2 and runtime validation procedure is documented in:
+
+```text
+docs/NATIVE_SNOW_LEOPARD_VALIDATION.md
+```
+
+The validation requires confirmation of the Tiger-compatible `i386` build, the `x86_64` slice, the universal bundle, and forced runtime launch of both slices on Snow Leopard.
+
 ## Development server
 
 The first client build uses the public, read-only API. The default server URL is:
