@@ -45,19 +45,13 @@ func (s *Store) Home(ctx context.Context, target compatibility.Target) (*HomeFee
 		{metric: "Top This Week", sort: "downloads-week"},
 		{metric: "Top Today", sort: "downloads-day"},
 	}
-	used := make(map[string]bool)
 	for _, ranking := range rankings {
-		candidates, loadErr := load(ranking.sort, 8)
+		candidates, loadErr := load(ranking.sort, 1)
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		for i := range candidates {
-			if used[candidates[i].Slug] {
-				continue
-			}
-			used[candidates[i].Slug] = true
-			feed.Slides = append(feed.Slides, HomeSlide{Metric: ranking.metric, App: candidates[i]})
-			break
+		if len(candidates) > 0 {
+			feed.Slides = append(feed.Slides, HomeSlide{Metric: ranking.metric, App: candidates[0]})
 		}
 	}
 
