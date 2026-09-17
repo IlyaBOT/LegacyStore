@@ -11,8 +11,149 @@ import (
 
 	"legacystore/backend/internal/account"
 	"legacystore/backend/internal/compatibility"
+	"legacystore/backend/internal/macmeta"
 	"legacystore/backend/internal/storage"
 )
+
+func (r *Router) adminInspectUpload(w http.ResponseWriter, req *http.Request) {
+	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+		return
+	}
+	if r.cfg.StorageBackend != "local" {
+		writeError(w, http.StatusServiceUnavailable, "local_storage_disabled")
+		return
+	}
+
+	local, err := storage.NewLocal(r.cfg.LocalStoragePath, r.cfg.MaxUploadBytes)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_unavailable")
+		return
+	}
+
+	req.Body = http.MaxBytesReader(w, req.Body, r.cfg.MaxUploadBytes+(2<<20))
+	reader, err := req.MultipartReader()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_multipart")
+		return
+	}
+
+	var saved *storage.SavedFile
+	var uploadedName string
+	for {
+		part, partErr := reader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if errors.Is(partErr, multipart.ErrMessageTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large")
+			return
+		}
+		if partErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid_multipart")
+			return
+		}
+		if part.FormName() != "file" {
+			_ = part.Close()
+			continue
+		}
+		if saved != nil {
+			_ = part.Close()
+			_ = local.Remove(saved.RelativePath)
+			writeError(w, http.StatusBadRequest, "multiple_files_not_allowed")
+			return
+		}
+		uploadedName = filepath.Base(part.FileName())
+		if uploadedName == "." || uploadedName == "" {
+			_ = part.Close()
+			writeError(w, http.StatusBadRequest, "invalid_file_name")
+			return
+		}
+		saved, err = local.SaveQuarantine(part, uploadedName)
+		_ = part.Close()
+		if errors.Is(err, storage.ErrTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "upload_failed")
+			return
+		}
+	}
+
+	if saved == nil {
+		writeError(w, http.StatusBadRequest, "file_required")
+		return
+	}
+	defer local.Remove(saved.RelativePath)
+
+	absolute, err := local.Resolve(saved.RelativePath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_unavailable")
+		return
+	}
+	result := macmeta.InspectFile(req.Context(), absolute, uploadedName)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"inspection": result,
+		"upload": map[string]any{
+			"sha256":     saved.SHA256,
+			"size_bytes": saved.SizeBytes,
+		},
+	})
+}
+
+func (r *Router) adminInspectAppBundle(w http.ResponseWriter, req *http.Request) {
+	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+		return
+	}
+	req.Body = http.MaxBytesReader(w, req.Body, 24<<20)
+	reader, err := req.MultipartReader()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_multipart")
+		return
+	}
+
+	var plistData []byte
+	var iconData []byte
+	var iconName string
+	for {
+		part, partErr := reader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if partErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid_multipart")
+			return
+		}
+		switch part.FormName() {
+		case "plist":
+			plistData, err = io.ReadAll(io.LimitReader(part, (8<<20)+1))
+			if err == nil && len(plistData) > 8<<20 {
+				err = storage.ErrTooLarge
+			}
+		case "icon":
+			iconName = filepath.Base(part.FileName())
+			iconData, err = io.ReadAll(io.LimitReader(part, (16<<20)+1))
+			if err == nil && len(iconData) > 16<<20 {
+				err = storage.ErrTooLarge
+			}
+		}
+		_ = part.Close()
+		if err != nil {
+			if errors.Is(err, storage.ErrTooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, "metadata_too_large")
+			} else {
+				writeError(w, http.StatusBadRequest, "invalid_multipart")
+			}
+			return
+		}
+	}
+	if len(plistData) == 0 {
+		writeError(w, http.StatusBadRequest, "plist_required")
+		return
+	}
+	result := macmeta.InspectAppBundleParts(plistData, iconData, iconName)
+	writeJSON(w, http.StatusOK, map[string]any{"inspection": result})
+}
 
 func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
@@ -196,6 +337,8 @@ func validOSRange(minOS, maxSupportedOS, maxTestedOS string) bool {
 func packageTypeFromName(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	switch ext {
+	case ".app":
+		return "app"
 	case ".dmg":
 		return "dmg"
 	case ".pkg", ".mpkg":
