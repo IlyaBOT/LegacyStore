@@ -142,10 +142,12 @@ PY
 
 . "$ROOT_DIR/scripts/api_tests/public.sh"
 . "$ROOT_DIR/scripts/api_tests/auth.sh"
+. "$ROOT_DIR/scripts/api_tests/security_v2.sh"
 . "$ROOT_DIR/scripts/api_tests/admin.sh"
 
 run_public_tests
 run_auth_tests
+run_security_v2_tests
 run_admin_tests
 
 if [ "$FAILED" -eq 0 ]; then
