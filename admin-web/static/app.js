@@ -6,10 +6,9 @@
     apps: [],
     route: "home",
     routeParams: new URLSearchParams(),
-    os: "10.9.5",
+    os: "10.9",
     arch: "x86_64",
     category: "",
-    downloads: [],
     currentUser: null,
     currentSession: null,
     pendingTwoFactorLogin: null,
@@ -25,8 +24,23 @@
 
   var osVersions = [
     "All Versions", "10.15", "10.14", "10.13", "10.12", "10.11", "10.10",
-    "10.9.5", "10.8", "10.7", "10.6.8", "10.5.8", "10.4.11"
+    "10.9", "10.8", "10.7", "10.6", "10.5", "10.4"
   ];
+
+  var osReleaseNames = {
+    "10.4": "Tiger",
+    "10.5": "Leopard",
+    "10.6": "Snow Leopard",
+    "10.7": "Lion",
+    "10.8": "Mountain Lion",
+    "10.9": "Mavericks",
+    "10.10": "Yosemite",
+    "10.11": "El Capitan",
+    "10.12": "Sierra",
+    "10.13": "High Sierra",
+    "10.14": "Mojave",
+    "10.15": "Catalina"
+  };
 
   var iconPaths = {
     account: '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-4.2 3-6.3 6.5-6.3s5.8 2.1 6.5 6.3"/>',
@@ -267,7 +281,7 @@
   }
 
   function queryTarget() {
-    return "os=" + encodeURIComponent(state.os || "10.9.5") + "&arch=" + encodeURIComponent(state.arch);
+    return "os=" + encodeURIComponent(state.os || "10.9") + "&arch=" + encodeURIComponent(state.arch) + "&os_series=1";
   }
 
   function loadApps(category, limit) {
@@ -415,6 +429,79 @@
       (reasons.length ? '<ul>' + reasons.map(function (reason) { return '<li>' + escapeHTML(reason.message || reason.code) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
   }
 
+  function parseOSVersionForDisplay(raw) {
+    var text = String(raw || "").trim();
+    if (!text) { return null; }
+    var parts = text.split(".");
+    if (parts.length < 2) { return null; }
+    return {
+      raw: text,
+      series: parts[0] + "." + parts[1],
+      patch: parts.length > 2 ? Number(parts[2]) : null,
+      hasPatch: parts.length > 2
+    };
+  }
+
+  function osVersionDisplay(raw) {
+    var parsed = parseOSVersionForDisplay(raw);
+    if (!parsed) { return String(raw || ""); }
+    var release = osReleaseNames[parsed.series];
+    return "OS X " + parsed.raw + (release ? " (" + release + ")" : "");
+  }
+
+  function artifactSupportedSystemsLabel(artifact) {
+    artifact = artifact || {};
+    var minOS = artifact.min_os || "";
+    var maxOS = artifact.max_supported_os || "";
+    if (minOS && maxOS && minOS === maxOS) {
+      return osVersionDisplay(minOS);
+    }
+    if (minOS && maxOS) {
+      return osVersionDisplay(minOS) + " – " + osVersionDisplay(maxOS);
+    }
+    if (minOS) {
+      return osVersionDisplay(minOS) + " or later";
+    }
+    if (maxOS) {
+      return osVersionDisplay(maxOS) + " or earlier";
+    }
+    return "Not specified";
+  }
+
+  function artifactPatchRequirementNote(artifact) {
+    artifact = artifact || {};
+    var minOS = parseOSVersionForDisplay(artifact.min_os);
+    var maxOS = parseOSVersionForDisplay(artifact.max_supported_os);
+    var notes = [];
+
+    if (minOS && maxOS && minOS.raw === maxOS.raw && (minOS.hasPatch || maxOS.hasPatch)) {
+      notes.push("This package is declared for OS X " + minOS.raw + " specifically. Operation on other system releases is not guaranteed.");
+      return notes.join(" ");
+    }
+
+    if (minOS && minOS.hasPatch && minOS.patch > 0) {
+      var minRelease = osReleaseNames[minOS.series];
+      notes.push("Note: this application requires OS X " + minOS.raw + " or later. Earlier releases of OS X " + minOS.series +
+        (minRelease ? " (" + minRelease + ")" : "") + " may not launch the application.");
+    }
+
+    if (maxOS && maxOS.hasPatch && artifact.hard_block_above_max) {
+      var maxRelease = osReleaseNames[maxOS.series];
+      notes.push("This package is supported only through OS X " + maxOS.raw + ". Later releases of OS X " + maxOS.series +
+        (maxRelease ? " (" + maxRelease + ")" : "") + " may not work.");
+    }
+
+    return notes.join(" ");
+  }
+
+  function artifactSystemRequirementsHTML(artifact) {
+    if (!artifact || !artifact.id) { return ""; }
+    var note = artifactPatchRequirementNote(artifact);
+    return '<div class="package-system-info"><p><strong>Supported systems:</strong><br><span class="muted">' +
+      escapeHTML(artifactSupportedSystemsLabel(artifact)) + "</span></p>" +
+      (note ? '<p class="package-system-note">' + escapeHTML(note) + "</p>" : "") + "</div>";
+  }
+
   function versionsTable(versions, app) {
     if (!versions || !versions.length) {
       return '<h2>Versions</h2><div class="empty-state compact">No versions</div>';
@@ -424,12 +511,13 @@
       (version.artifacts || []).forEach(function (artifact) {
         var blocked = artifact.compatibility_status === "blocked";
         rows.push('<tr><td>' + escapeHTML(version.version) + '</td><td>' + escapeHTML(version.release_date || "") + '</td><td>' +
-          escapeHTML((artifact.archs || []).join(", ")) + '</td><td>' + escapeHTML(artifact.compatibility_label || artifact.compatibility_status || "") + '</td><td class="actions">' +
+          escapeHTML((artifact.archs || []).join(", ")) + '</td><td>' + escapeHTML(artifactSupportedSystemsLabel(artifact)) + '</td><td>' +
+          escapeHTML(artifact.compatibility_label || artifact.compatibility_status || "") + '</td><td class="actions">' +
           '<button class="metal-button small-action" data-download-artifact="' + escapeHTML(artifact.id) + '" data-download-app="' + escapeHTML(app.name) +
           '" data-download-version="' + escapeHTML(version.version) + '" type="button"' + (blocked ? " disabled" : "") + ">Download</button></td></tr>");
       });
     });
-    return '<h2>Versions</h2><table class="version-table"><thead><tr><th>Version</th><th>Date</th><th>Arch</th><th>Status</th><th></th></tr></thead><tbody>' + rows.join("") + "</tbody></table>";
+    return '<h2>Versions</h2><table class="version-table"><thead><tr><th>Version</th><th>Date</th><th>Arch</th><th>Systems</th><th>Status</th><th></th></tr></thead><tbody>' + rows.join("") + "</tbody></table>";
   }
 
   function renderApp(slug) {
@@ -445,7 +533,8 @@
         '<div class="detail-grid"><section class="detail-copy"><h2>Description</h2><p>' + escapeHTML(app.description || "") + '</p>' + screenshotStrip(app) +
         compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app.slug) + '</section><aside class="side-box"><h2>Information</h2>' +
         infoRow("Category", app.category) + infoRow("Version", artifact.version) + infoRow("Size", formatSize(artifact.size_bytes)) + infoRow("Package", artifact.package_type) +
-        infoRow("SHA-256", artifact.sha256) + infoRow("Minimum macOS", artifact.min_os) + infoRow("Maximum supported", artifact.max_supported_os) + '</aside></div>';
+        artifactSystemRequirementsHTML(artifact) + infoRow("Minimum macOS", artifact.min_os) + infoRow("Maximum supported", artifact.max_supported_os) +
+        infoRow("SHA-256", artifact.sha256) + '</aside></div>';
       bindRouteButtons(main);
       bindImageFallbacks(main);
       bindArtifactButtons(main);
@@ -520,34 +609,13 @@
 
   function loadDownloadMetadata(id, appName, version) {
     api("/download/" + encodeURIComponent(id) + "?" + queryTarget()).then(function (metadata) {
-      state.downloads.unshift({
-        name: appName || "Application",
-        version: version || metadata.version,
-        file: metadata.file_name,
-        size: formatSize(metadata.size_bytes),
-        sha256: metadata.sha256,
-        source: metadata.download_url || metadata.external_page_url || "",
-        sourceType: metadata.source_type
-      });
-      routeTo("downloads");
+      var source = metadata.download_url || metadata.external_page_url || "";
+      if (!source) {
+        throw new Error("download_source_unavailable");
+      }
+      setStatus("Download: " + (appName || metadata.file_name || "Application"), version || metadata.version || "", "Handled by browser");
+      window.location.assign(source);
     }).catch(renderError);
-  }
-
-  function renderDownloads() {
-    var rows = state.downloads.map(function (item) {
-      return '<div class="download-row"><div><strong>' + escapeHTML(item.name) + " " + escapeHTML(item.version || "") + '</strong><div class="muted">' +
-        escapeHTML(item.file || "") + '</div><small class="mono">' + escapeHTML(item.sha256 || "") + '</small></div><div>' + escapeHTML(item.size || "") + '</div><div>' +
-        (item.source ? '<a class="metal-button" href="' + escapeHTML(item.source) + '" target="_blank" rel="noopener noreferrer">Open Source</a>' : '<span class="muted">No direct source</span>') + "</div></div>";
-    }).join("");
-    main.innerHTML = '<div class="view-title"><h1>Downloads</h1></div><div class="download-list">' + (rows || '<div class="empty-state">No items</div>') + "</div>";
-    setStatus("Showing: Downloads", state.downloads.length + " items", "Metadata only in web UI");
-    renderSidebar();
-  }
-
-  function renderUpdates() {
-    main.innerHTML = '<div class="view-title"><h1>Updates</h1></div><section class="section-panel"><div class="section-header"><h2>Available Updates</h2></div><div class="empty-state">Native-client update tracking is not available in the web UI.</div></section>';
-    setStatus("Showing: Updates", "0 items", "");
-    renderSidebar();
   }
 
   function renderTopCharts() {
@@ -602,7 +670,7 @@
       '<div class="form-row"><label>Roles</label><input type="text" disabled value="' + escapeHTML(rolesOf(user).join(", ")) + '"></div>' +
       '<div id="profileNotice" class="form-message"></div><button class="blue-button" type="submit">Save</button></form></section>' +
       '<section class="account-panel"><h2>Account</h2><ul class="setting-list"><li><span>Email verified</span><span>' + (user.email_verified ? "Yes" : "No") + '</span></li>' +
-      '<li><span>Two-factor authentication</span><span>' + (user.two_factor_enabled ? "Enabled" : "Off") + '</span></li><li><span>Downloads in this browser</span><span>' + state.downloads.length + "</span></li></ul></section></div>";
+      '<li><span>Two-factor authentication</span><span>' + (user.two_factor_enabled ? "Enabled" : "Off") + "</span></li></ul></section></div>";
   }
 
   function secondFactorFields(prefix) {
@@ -1154,8 +1222,6 @@
     if (state.route === "categories") { renderCategories(); return; }
     if (state.route === "search") { renderSearch(parsed.params.get("q") || ""); return; }
     if (state.route.indexOf("app/") === 0) { renderApp(state.route.split("/")[1]); return; }
-    if (state.route === "downloads") { renderDownloads(); return; }
-    if (state.route === "updates") { renderUpdates(); return; }
     if (state.route === "top-charts") { renderTopCharts(); return; }
     if (state.route === "logout") { performLogout(); return; }
 
