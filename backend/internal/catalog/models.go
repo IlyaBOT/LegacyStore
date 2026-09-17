@@ -32,7 +32,7 @@ type HomeFeed struct {
 	Popular      []AppSummary `json:"popular"`
 	TopDownloads []AppSummary `json:"top_downloads"`
 	NewReleases  []AppSummary `json:"new_releases"`
-	Slides       []HomeSlide   `json:"slides"`
+	Slides       []HomeSlide  `json:"slides"`
 }
 
 type AppDetail struct {
