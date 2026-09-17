@@ -64,9 +64,12 @@ frontend_bundle() {
   N=FrontendBundle
   static_get '/app.js'
   [ "$STATUS" = 200 ] || { fail "$N" HttpStatus 200 "$STATUS"; return; }
-  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
+  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' '/home?' 'homeCarousel' 'Popular' 'Top Downloads' 'New Releases' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
     grep -Fq "$marker" "$BODY" || { fail "$N" MissingIntegration "$marker" 'not found'; return; }
   done
+  if grep -Fq 'New and Noteworthy' "$BODY" || grep -Fq 'panel("Graphics & Design"' "$BODY"; then
+    fail "$N" LegacyHomeSections 'Popular, Top Downloads and New Releases only' 'legacy home section found'; return
+  fi
   if grep -Fq 'document.cookie' "$BODY"; then
     fail "$N" SessionSecurity 'server-owned HttpOnly session cookie' 'document.cookie found'; return
   fi
@@ -77,8 +80,8 @@ frontend_bundle() {
     fail "$N" WebOnlyNavigation 'browser-managed downloads and no update manager' 'legacy-client-only web view found'; return
   fi
   static_get '/ui-fixes.css'
-  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY" || ! grep -Fq '.upload-bento' "$BODY" || ! grep -Fq '.bubble-toast' "$BODY" || ! grep -Fq '.field-totp' "$BODY"; then
-    fail "$N" IconStyles 'stable icons plus bento/upload/toast styles' "$STATUS $(head -c 300 "$BODY")"; return
+  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY" || ! grep -Fq '.upload-bento' "$BODY" || ! grep -Fq '.bubble-toast' "$BODY" || ! grep -Fq '.field-totp' "$BODY" || ! grep -Fq '.home-carousel' "$BODY" || ! grep -Fq '.finder-mark' "$BODY"; then
+    fail "$N" IconStyles 'stable icons, bento forms and carousel styles' "$STATUS $(head -c 300 "$BODY")"; return
   fi
   ok "$N"
 }
