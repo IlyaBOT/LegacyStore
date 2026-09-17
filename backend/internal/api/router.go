@@ -90,7 +90,10 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("POST /api/v1/admin/users/{id}/roles", r.adminAddRole)
 	r.mux.HandleFunc("DELETE /api/v1/admin/users/{id}/roles/{role}", r.adminRemoveRole)
 
-	r.mux.HandleFunc("POST /api/v1/admin/uploads/inspect", r.adminInspectUpload)\n\tr.mux.HandleFunc("POST /api/v1/admin/uploads/inspect-app-bundle", r.adminInspectAppBundle)\n\n\tr.mux.HandleFunc("GET /api/v1/admin/apps", r.adminApps)
+	r.mux.HandleFunc("POST /api/v1/admin/uploads/inspect", r.adminInspectUpload)
+	r.mux.HandleFunc("POST /api/v1/admin/uploads/inspect-app-bundle", r.adminInspectAppBundle)
+
+	r.mux.HandleFunc("GET /api/v1/admin/apps", r.adminApps)
 	r.mux.HandleFunc("POST /api/v1/admin/apps", r.adminCreateApp)
 	r.mux.HandleFunc("PATCH /api/v1/admin/apps/{id}", r.adminUpdateApp)
 	r.mux.HandleFunc("DELETE /api/v1/admin/apps/{id}", r.adminDeleteApp)
