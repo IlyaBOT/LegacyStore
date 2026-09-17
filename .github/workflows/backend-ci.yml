@@ -9,6 +9,7 @@ on:
     paths:
       - 'backend/**'
       - 'scripts/test_api.sh'
+      - 'scripts/api_tests/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -68,6 +69,8 @@ jobs:
       PUBLIC_BASE_URL: http://localhost:8080
       TRUST_PROXY_HEADERS: 'true'
       CATALOG_SIGNING_ENABLED: 'false'
+      API_TEST_ADMIN_EMAIL: admin@legacystore.local
+      API_TEST_ADMIN_PASSWORD: admin12345
     steps:
       - name: Checkout
         uses: actions/checkout@v4
