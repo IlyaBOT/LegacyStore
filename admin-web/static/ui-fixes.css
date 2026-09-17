@@ -409,3 +409,105 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Keep the primary toolbar geometrically centered regardless of side controls. */
+.topbar {
+  grid-template-columns: 258px auto 258px;
+}
+
+.history-controls {
+  justify-self: start;
+}
+
+.toolbar-tabs {
+  justify-self: center;
+  width: max-content;
+  gap: 54px;
+}
+
+.search-box {
+  justify-self: end;
+  width: 258px;
+}
+
+/* Toolbar glyphs are single-shape SVGs; do not combine fill and stroke. */
+.tab-icon {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+  stroke: none;
+  shape-rendering: geometricPrecision;
+}
+
+.toolbar-tab.is-active .tab-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+.app-icon-image {
+  object-fit: contain;
+  background: transparent;
+}
+
+.package-system-info {
+  margin: 10px 0 12px;
+  padding-top: 9px;
+  border-top: 1px solid #e1e4e7;
+}
+
+.package-system-info p {
+  margin: 0 0 6px;
+}
+
+.package-system-note {
+  margin-top: 5px !important;
+  color: #6a737d;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.version-table td {
+  vertical-align: top;
+}
+
+@media (max-width: 1100px) and (min-width: 981px) {
+  .topbar {
+    grid-template-columns: 190px auto 190px;
+  }
+
+  .toolbar-tabs {
+    gap: 28px;
+  }
+
+  .search-box {
+    width: 190px;
+  }
+}
+
+@media (max-width: 980px) {
+  .topbar {
+    grid-template-columns: 80px 1fr;
+    grid-template-areas:
+      "history search"
+      "tabs tabs";
+  }
+
+  .history-controls {
+    grid-area: history;
+  }
+
+  .toolbar-tabs {
+    grid-area: tabs;
+    width: 100%;
+    justify-self: stretch;
+    justify-content: center;
+    gap: 28px;
+  }
+
+  .search-box {
+    grid-area: search;
+    width: 100%;
+    justify-self: stretch;
+  }
+}
