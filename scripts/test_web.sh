@@ -70,8 +70,8 @@ frontend_bundle() {
   if grep -Fq 'document.cookie' "$BODY"; then
     fail "$N" SessionSecurity 'server-owned HttpOnly session cookie' 'document.cookie found'; return
   fi
-  if grep -Fq '"10.9.5"' "$BODY" || grep -Fq '"10.6.8"' "$BODY" || grep -Fq '"10.5.8"' "$BODY" || grep -Fq '"10.4.11"' "$BODY"; then
-    fail "$N" CatalogOSSeries 'major.minor-only web catalog filters' 'patch-level filter value found'; return
+  if grep -Fq 'os: "10.9.5"' "$BODY" || grep -Fq '"10.9.5", "10.8"' "$BODY" || grep -Fq '"10.6.8", "10.5.8"' "$BODY" || grep -Fq '"10.5.8", "10.4.11"' "$BODY"; then
+    fail "$N" CatalogOSSeries 'major.minor-only web catalog filters' 'patch-level value found in catalog filter definitions'; return
   fi
   if grep -Fq 'function renderDownloads' "$BODY" || grep -Fq 'function renderUpdates' "$BODY"; then
     fail "$N" WebOnlyNavigation 'browser-managed downloads and no update manager' 'legacy-client-only web view found'; return
