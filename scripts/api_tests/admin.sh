@@ -62,6 +62,53 @@ test_admin_moderation() {
     return
   fi
 
+  api_request POST "/api/v1/admin/apps/$APP_ID/versions" 1 "$UPLOADER_TOKEN" '{"version":"1.0-test","changelog":"Integration upload test"}'
+  VERSION_ID=$(body_value '.version.id // empty')
+  if ! status_is 201 || [ -z "$VERSION_ID" ]; then
+    err "$NAME" CreateVersion '201 and version id' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  UPLOAD_FILE="$TMP_DIR/LegacyStore-API-Test.dmg"
+  printf 'LegacyStore integration artifact\n' > "$UPLOAD_FILE"
+  multipart_test_upload "/api/v1/admin/versions/$VERSION_ID/upload" "$UPLOADER_TOKEN" "$UPLOAD_FILE"
+  ARTIFACT_ID=$(body_value '.artifact.id // empty')
+  if ! status_is 200 || [ -z "$ARTIFACT_ID" ] || ! jq_ok '.artifact.moderation_status == "pending" and .upload.status == "quarantined" and (.upload.sha256 | length == 64)'; then
+    err "$NAME" Upload 'quarantined artifact with SHA-256' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 0
+  if ! status_is 404; then
+    err "$NAME" QuarantineIsolation '404 before artifact approval' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/admin/moderation?status=pending' 1 "$ADMIN_TOKEN"
+  ARTIFACT_QUEUE_ID=$(jq -r --arg id "$ARTIFACT_ID" '.items[] | select(.entity_type == "artifact" and .entity_id == $id) | .id' "$BODY_FILE" 2>/dev/null | head -n 1)
+  if ! status_is 200 || [ -z "$ARTIFACT_QUEUE_ID" ]; then
+    err "$NAME" ArtifactQueue 'pending artifact queue item' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST "/api/v1/admin/moderation/$ARTIFACT_QUEUE_ID/approve" 1 "$ADMIN_TOKEN" '{"comment":"Artifact approved"}'
+  if ! status_is 200 || ! jq_ok '.status == "ok"'; then
+    err "$NAME" ArtifactApproval 'approved status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/download/$ARTIFACT_ID?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.source_type == "local" and (.download_url | contains("/api/v1/files/")) and (.sha256 | length == 64)'; then
+    err "$NAME" LocalDownloadMetadata 'local download URL and SHA-256' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 0
+  if ! status_is 200 || ! cmp -s "$UPLOAD_FILE" "$BODY_FILE"; then
+    err "$NAME" LocalFileDownload 'approved file bytes' "$(cat "$STATUS_FILE")"
+    return
+  fi
+
   api_request GET '/api/v1/admin/audit-log' 1 "$ADMIN_TOKEN"
   if ! status_is 200 || ! jq_ok '.items | type == "array" and length > 0'; then
     err "$NAME" AuditLog 'non-empty audit log' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
