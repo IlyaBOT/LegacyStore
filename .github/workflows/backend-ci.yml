@@ -68,6 +68,9 @@ jobs:
       BACKEND_PORT: 8080
       PUBLIC_BASE_URL: http://localhost:8080
       TRUST_PROXY_HEADERS: 'true'
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /tmp/legacystore-ci-storage
+      MAX_UPLOAD_BYTES: '104857600'
       CATALOG_SIGNING_ENABLED: 'false'
       API_TEST_ADMIN_EMAIL: admin@legacystore.local
       API_TEST_ADMIN_PASSWORD: admin12345
@@ -109,6 +112,8 @@ jobs:
         working-directory: backend
         run: |
           set -euo pipefail
+          rm -rf "$LOCAL_STORAGE_PATH"
+          mkdir -p "$LOCAL_STORAGE_PATH"
           go run ./cmd/legacystore-backend >../backend-integration.log 2>&1 &
           echo $! >../backend-integration.pid
           for attempt in $(seq 1 30); do
