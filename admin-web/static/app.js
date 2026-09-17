@@ -707,20 +707,32 @@
 
   function profilePanel() {
     var user = state.currentUser || {};
-    return '<div class="auth-grid"><section class="account-panel"><h2>Profile</h2><form id="profileForm">' +
-      '<div class="form-row"><label>Nickname</label><input name="nickname" type="text" value="' + escapeHTML(user.nickname || "") + '"></div>' +
-      '<div class="form-row"><label>Avatar URL</label><input name="avatar_url" type="url" value="' + escapeHTML(user.avatar_url || "") + '"></div>' +
-      '<div class="form-row"><label>Email</label><input type="email" disabled value="' + escapeHTML(user.email || "") + '"></div>' +
-      '<div class="form-row"><label>Roles</label><input type="text" disabled value="' + escapeHTML(rolesOf(user).join(", ")) + '"></div>' +
-      '<div id="profileNotice" class="form-message"></div><button class="blue-button" type="submit">Save</button></form></section>' +
-      '<section class="account-panel"><h2>Account</h2><ul class="setting-list"><li><span>Email verified</span><span>' + (user.email_verified ? "Yes" : "No") + '</span></li>' +
-      '<li><span>Two-factor authentication</span><span>' + (user.two_factor_enabled ? "Enabled" : "Off") + "</span></li></ul></section></div>";
+    var initials = String(user.nickname || user.email || "LS").split(/\s+/).map(function (part) { return part.charAt(0); }).join("").slice(0, 2).toUpperCase();
+    var avatar = user.avatar_url ?
+      '<img class="profile-avatar-image" src="' + escapeHTML(user.avatar_url) + '" alt="">' :
+      '<span class="profile-avatar-fallback">' + escapeHTML(initials) + '</span>';
+    return '<div class="profile-bento">' +
+      '<section class="bento-card profile-identity-card"><div class="profile-avatar">' + avatar + '</div><div class="profile-identity-copy"><h2>' +
+      escapeHTML(user.nickname || "LegacyStore User") + '</h2><p>' + escapeHTML(user.email || "") + '</p><div class="profile-role-row">' +
+      rolesOf(user).map(function (role) { return '<span class="role-chip">' + escapeHTML(role) + '</span>'; }).join("") + '</div></div></section>' +
+      '<section class="bento-card profile-edit-card"><h2>Profile details</h2><p class="panel-help">Public nickname and optional avatar used on reviews and account pages.</p>' +
+      '<form id="profileForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Nickname</label><input name="nickname" type="text" maxlength="80" ' +
+      'placeholder="Steve Jobs" value="' + escapeHTML(user.nickname || "") + '"><small>Shown next to your reviews and submissions.</small></div>' +
+      '<div class="form-row field-wide"><label>Avatar URL</label><input name="avatar_url" type="url" placeholder="https://example.com/avatar.png" value="' +
+      escapeHTML(user.avatar_url || "") + '"><small>HTTPS image URL. Leave empty to use your initials.</small></div></div>' +
+      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button></div></form></section>' +
+      '<section class="bento-card profile-status-card"><h2>Account</h2><div class="account-metric-grid">' +
+      '<div class="account-metric"><span>Email</span><strong>' + (user.email_verified ? "Verified" : "Not verified") + '</strong></div>' +
+      '<div class="account-metric"><span>Two-factor authentication</span><strong>' + (user.two_factor_enabled ? "Enabled" : "Off") + '</strong></div></div>' +
+      '<button class="metal-button" data-route="security" type="button">Security settings</button></section></div>';
   }
 
   function secondFactorFields(prefix) {
-    return '<div class="two-factor-choice"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></div>' +
-      '<span class="or">or</span><div class="form-row"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code"></div></div>' +
-      '<div class="panel-help">Use one second factor when 2FA is enabled.</div>' + (prefix ? "" : "");
+    return '<div class="second-factor-inline"><div class="form-row field-totp"><label>Authenticator code</label>' +
+      '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456">' +
+      '<small>6 digits from your authenticator.</small></div><span class="or">or</span>' +
+      '<div class="form-row field-recovery"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">' +
+      '<small>Use one recovery code instead.</small></div></div>' + (prefix ? "" : "");
   }
 
   function recoveryCodesHTML() {
@@ -733,29 +745,38 @@
     var enabled = !!(state.currentUser && state.currentUser.two_factor_enabled);
     var twoFactorBody;
     if (!enabled) {
-      twoFactorBody = '<p class="panel-help">Setup requires your current account password. After scanning the secret, confirm with a TOTP code.</p>' +
-        '<form id="setup2FAForm"><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
+      twoFactorBody = '<p class="panel-help">Protect the account with a six-digit TOTP code. Your current password is required before a secret is generated.</p>' +
+        '<form id="setup2FAForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Current password</label>' +
+        '<input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div></div>' +
         '<div class="form-actions"><button class="metal-button" type="submit">Generate 2FA secret</button></div></form>' +
-        (state.twoFactorSetup ? '<div class="secret-box"><strong>Secret</strong><div class="mono">' + escapeHTML(state.twoFactorSetup.secret || "") + '</div><div class="mono">' +
-          escapeHTML(state.twoFactorSetup.otpauth_url || "") + '</div></div><form id="verify2FAForm"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code" required></div>' +
-          '<div class="form-actions"><button class="blue-button" type="submit">Enable 2FA</button></div></form>' : "");
+        (state.twoFactorSetup ? '<div class="secret-box"><strong>Authenticator secret</strong><div class="mono">' + escapeHTML(state.twoFactorSetup.secret || "") +
+          '</div><div class="mono secret-url">' + escapeHTML(state.twoFactorSetup.otpauth_url || "") + '</div></div>' +
+          '<form id="verify2FAForm"><div class="compact-field-grid"><div class="form-row field-totp"><label>Confirm code</label>' +
+          '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456" required>' +
+          '<small>Enter the current six-digit code.</small></div></div><div class="form-actions"><button class="blue-button" type="submit">Enable 2FA</button></div></form>' : "");
     } else {
-      twoFactorBody = '<p class="panel-help">2FA is enabled. Recovery codes can replace a TOTP code once each.</p>' + recoveryCodesHTML() +
-        '<form id="regenerateRecoveryCodesForm"><h3>Regenerate recovery codes</h3><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-        secondFactorFields("regenerate") + '<div class="form-actions"><button class="metal-button" type="submit">Regenerate Codes</button></div></form>' +
-        '<form id="disable2FAForm"><h3>Disable 2FA</h3><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-        secondFactorFields("disable") + '<div class="form-actions"><button class="metal-button" type="submit">Disable 2FA</button></div></form>';
+      twoFactorBody = '<p class="panel-help">Two-factor authentication is enabled. Recovery codes are single-use.</p>' + recoveryCodesHTML() +
+        '<div class="security-mini-grid"><form id="regenerateRecoveryCodesForm" class="security-mini-card"><h3>New recovery codes</h3>' +
+        '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+        secondFactorFields("regenerate") + '<div class="form-actions"><button class="metal-button" type="submit">Regenerate</button></div></form>' +
+        '<form id="disable2FAForm" class="security-mini-card danger-zone"><h3>Disable 2FA</h3>' +
+        '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+        secondFactorFields("disable") + '<div class="form-actions"><button class="metal-button" type="submit">Disable 2FA</button></div></form></div>';
     }
 
-    return '<div class="security-stack"><section class="account-panel"><h2>Two-Factor Authentication</h2><ul class="setting-list"><li><span>Status</span><span>' + (enabled ? "Enabled" : "Off") + "</span></li></ul>" +
-      twoFactorBody + '<div id="twoFactorNotice" class="form-message"></div></section>' +
-      '<section class="account-panel"><h2>Change Password</h2><form id="changePasswordForm"><div class="form-grid"><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-      '<div class="form-row"><label>New password</label><input name="new_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="span-2">' + secondFactorFields("password") +
-      '</div></div><div id="passwordNotice" class="form-message"></div><button class="blue-button" type="submit">Change Password</button></form></section>' +
-      '<section class="account-panel"><h2>Change Email</h2><form id="changeEmailForm"><div class="form-grid"><div class="form-row"><label>New email</label><input name="new_email" type="email" autocomplete="email" required></div>' +
-      '<div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div><div class="span-2">' + secondFactorFields("email") +
-      '</div></div><div id="emailNotice" class="form-message"></div><button class="blue-button" type="submit">Change Email</button></form></section>' +
-      '<section class="account-panel"><h2>Active Sessions</h2><div id="sessionsList" class="loading">Loading...</div></section></div>';
+    return '<div class="security-bento"><section class="bento-card security-2fa-card"><div class="card-heading-row"><div><h2>Two-Factor Authentication</h2>' +
+      '<p class="card-kicker">' + (enabled ? "Enabled" : "Not enabled") + '</p></div><span class="status-chip ' + (enabled ? "active" : "") + '">' +
+      (enabled ? "Enabled" : "Off") + '</span></div>' + twoFactorBody + '<div id="twoFactorNotice" class="form-message"></div></section>' +
+      '<section class="bento-card security-password-card"><h2>Change Password</h2><p class="panel-help">Other active sessions are revoked after a password change.</p>' +
+      '<form id="changePasswordForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Current password</label>' +
+      '<input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+      '<div class="form-row field-medium"><label>New password</label><input name="new_password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></div></div>' +
+      secondFactorFields("password") + '<div id="passwordNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Change Password</button></div></form></section>' +
+      '<section class="bento-card security-email-card"><h2>Change Email</h2><p class="panel-help">The new address must be verified again.</p>' +
+      '<form id="changeEmailForm"><div class="compact-field-grid"><div class="form-row field-wide"><label>New email</label><input name="new_email" type="email" autocomplete="email" placeholder="me@example.com" required></div>' +
+      '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div></div>' +
+      secondFactorFields("email") + '<div id="emailNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Change Email</button></div></form></section>' +
+      '<section class="bento-card security-sessions-card"><h2>Active Sessions</h2><p class="panel-help">Revoke browsers or devices you no longer use.</p><div id="sessionsList" class="loading">Loading...</div></section></div>';
   }
 
   function legacyPasswordsPanel() {
