@@ -27,10 +27,15 @@ func main() {
 	}
 	defer conn.Close()
 
+	handler := api.NewRouter(cfg, catalog.NewStore(conn), account.NewStore(conn))
 	server := &http.Server{
 		Addr:              cfg.Addr(),
-		Handler:           api.NewRouter(cfg, catalog.NewStore(conn), account.NewStore(conn)),
+		Handler:           api.SecurityMiddleware(handler),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    32 << 10,
 	}
 
 	go func() {
