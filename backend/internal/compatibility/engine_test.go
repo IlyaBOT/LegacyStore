@@ -50,7 +50,6 @@ func TestEvaluateUntestedNewerOS(t *testing.T) {
 	}
 }
 
-
 func TestEvaluateOSSeriesAllowsPatchLevelMinimumWithinSameRelease(t *testing.T) {
 	result := Evaluate(Target{OSVersion: "10.6", Arch: "x86_64", OSSeries: true}, Artifact{
 		MinOS:         "10.6.8",
