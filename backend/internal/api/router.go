@@ -10,27 +10,36 @@ import (
 
 	"legacystore/backend/internal/account"
 	"legacystore/backend/internal/catalog"
+	"legacystore/backend/internal/catalogsign"
 	"legacystore/backend/internal/compatibility"
 	"legacystore/backend/internal/config"
 )
 
 type Router struct {
-	mux   *http.ServeMux
-	cfg   config.Config
-	store *catalog.Store
-	users *account.Store
+	mux    *http.ServeMux
+	cfg    config.Config
+	store  *catalog.Store
+	users  *account.Store
+	signer *catalogsign.Signer
 }
 
 func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) http.Handler {
+	return NewRouterWithSigner(cfg, store, users, nil)
+}
+
+func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account.Store, signer *catalogsign.Signer) http.Handler {
 	r := &Router{
-		mux:   http.NewServeMux(),
-		cfg:   cfg,
-		store: store,
-		users: users,
+		mux:    http.NewServeMux(),
+		cfg:    cfg,
+		store:  store,
+		users:  users,
+		signer: signer,
 	}
 
 	r.mux.HandleFunc("GET /healthz", r.health)
 	r.mux.HandleFunc("GET /api/v1/bootstrap", r.bootstrap)
+	r.mux.HandleFunc("GET /api/v1/catalog/manifest", r.catalogManifest)
+	r.mux.HandleFunc("GET /api/v1/catalog/public-key", r.catalogPublicKey)
 	r.mux.HandleFunc("GET /api/v1/categories", r.categories)
 	r.mux.HandleFunc("GET /api/v1/apps", r.apps)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}", r.appDetail)
@@ -40,13 +49,16 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 	r.mux.HandleFunc("GET /api/v1/download/{artifact_id}", r.download)
 	r.mux.HandleFunc("GET /api/v1/files/{artifact_id}", r.localArtifactFile)
 
-	r.mux.HandleFunc("POST /api/v1/auth/login", r.login)
+	r.mux.HandleFunc("POST /api/v1/auth/login", r.loginV2)
 	r.mux.HandleFunc("POST /api/v1/auth/register", r.register)
 	r.mux.HandleFunc("POST /api/v1/auth/logout", r.logout)
 	r.mux.HandleFunc("POST /api/v1/auth/refresh", r.refresh)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/setup", r.setup2FA)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/verify", r.verify2FA)
-	r.mux.HandleFunc("POST /api/v1/auth/2fa/disable", r.disable2FA)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/setup", r.setup2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/verify", r.verify2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/disable", r.disable2FAV2)
+	r.mux.HandleFunc("POST /api/v1/auth/2fa/recovery-codes/regenerate", r.regenerate2FARecoveryCodes)
+	r.mux.HandleFunc("POST /api/v1/auth/recovery/request", r.requestPasswordRecovery)
+	r.mux.HandleFunc("POST /api/v1/auth/recovery/reset", r.resetPasswordRecovery)
 	r.mux.HandleFunc("POST /api/v1/auth/oauth/google", r.authNotAvailable)
 	r.mux.HandleFunc("POST /api/v1/auth/oauth/apple", r.authNotAvailable)
 	r.mux.HandleFunc("POST /api/v1/auth/legacy/login", r.legacyLogin)
@@ -54,6 +66,8 @@ func NewRouter(cfg config.Config, store *catalog.Store, users *account.Store) ht
 	r.mux.HandleFunc("GET /api/v1/me", r.me)
 	r.mux.HandleFunc("PATCH /api/v1/me", r.updateMe)
 	r.mux.HandleFunc("POST /api/v1/me/avatar", r.updateMe)
+	r.mux.HandleFunc("POST /api/v1/me/password", r.changePassword)
+	r.mux.HandleFunc("POST /api/v1/me/email", r.changeEmail)
 	r.mux.HandleFunc("GET /api/v1/me/sessions", r.sessions)
 	r.mux.HandleFunc("DELETE /api/v1/me/sessions/{id}", r.revokeSession)
 	r.mux.HandleFunc("GET /api/v1/me/legacy-passwords", r.legacyPasswords)
