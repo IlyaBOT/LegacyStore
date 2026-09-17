@@ -304,6 +304,7 @@ func targetFromRequest(req *http.Request) compatibility.Target {
 	return compatibility.Target{
 		OSVersion: values.Get("os"),
 		Arch:      values.Get("arch"),
+		OSSeries:  boolParam(values.Get("os_series")),
 	}
 }
 
