@@ -685,8 +685,9 @@
 
   function twoFactorLoginForm(email) {
     return '<div class="auth-window auth-window-small"><section class="account-panel auth-panel"><h2>Two-Factor Authentication</h2><p class="auth-summary">' + escapeHTML(email) + '</p>' +
-      '<form id="twoFactorLoginForm"><div class="two-factor-choice"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></div>' +
-      '<span class="or">or</span><div class="form-row"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code"></div></div>' +
+      '<form id="twoFactorLoginForm"><div class="second-factor-inline"><div class="form-row field-totp"><label>Authenticator code</label>' +
+      '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456"><small>6 digits.</small></div>' +
+      '<span class="or">or</span><div class="form-row field-recovery"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX"></div></div>' +
       '<div id="twoFactorLoginNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Verify</button>' +
       '<button class="metal-button" id="cancel2FALoginButton" type="button">Back</button></div></form></section></div>';
   }
