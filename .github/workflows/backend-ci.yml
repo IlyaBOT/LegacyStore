@@ -71,9 +71,15 @@ jobs:
       STORAGE_BACKEND: local
       LOCAL_STORAGE_PATH: /tmp/legacystore-ci-storage
       MAX_UPLOAD_BYTES: '104857600'
-      CATALOG_SIGNING_ENABLED: 'false'
-      API_TEST_ADMIN_EMAIL: admin@legacystore.local
-      API_TEST_ADMIN_PASSWORD: admin12345
+      CATALOG_SIGNING_ENABLED: 'true'
+      CATALOG_PRIVATE_KEY_PATH: /tmp/legacystore-ci-catalog-private.pem
+      CATALOG_PUBLIC_KEY_PATH: /tmp/legacystore-ci-catalog-public.pem
+      ADMIN_EMAIL: ci-admin@legacystore.local
+      ADMIN_PASSWORD: 'CI-Admin-Password-2026!'
+      ADMIN_NICKNAME: CI Administrator
+      API_TEST_ADMIN_EMAIL: ci-admin@legacystore.local
+      API_TEST_ADMIN_PASSWORD: 'CI-Admin-Password-2026!'
+      RECOVERY_DEBUG_RETURN_TOKEN: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,9 +110,19 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
 
-      - name: Load fixtures
+      - name: Load fixtures without seeded administrator
         working-directory: backend
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f fixtures/seed.sql
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f fixtures/seed.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DELETE FROM users WHERE lower(email) = 'admin@legacystore.local';"
+
+      - name: Generate catalog signing key pair
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$CATALOG_PRIVATE_KEY_PATH"
+          openssl pkey -in "$CATALOG_PRIVATE_KEY_PATH" -pubout -out "$CATALOG_PUBLIC_KEY_PATH"
+          chmod 600 "$CATALOG_PRIVATE_KEY_PATH"
 
       - name: Start backend
         working-directory: backend
@@ -125,7 +141,15 @@ jobs:
           cat ../backend-integration.log
           exit 1
 
-      - name: Run API integration tests
+      - name: Verify production admin provisioning in database
+        run: |
+          set -euo pipefail
+          admin_count=$(psql "$DATABASE_URL" -Atc "SELECT COUNT(*) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin';")
+          admin_email=$(psql "$DATABASE_URL" -Atc "SELECT lower(u.email) FROM user_roles ur JOIN roles r ON r.id = ur.role_id JOIN users u ON u.id = ur.user_id WHERE r.name = 'admin';")
+          test "$admin_count" = "1"
+          test "$admin_email" = "ci-admin@legacystore.local"
+
+      - name: Run API integration and security tests
         env:
           BASE_URL: http://localhost:8080
         run: ./scripts/test_api.sh
