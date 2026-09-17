@@ -14,7 +14,7 @@
     pendingTwoFactorLogin: null,
     twoFactorSetup: null,
     recoveryCodes: [],
-    uploadContext: { appId: "", versionId: "" }
+    uploadContext: { appId: "", versionId: "", file: null, inspection: null, iconDataURL: "" }
   };
 
   var main = document.getElementById("main");
@@ -41,6 +41,50 @@
     "10.14": "Mojave",
     "10.15": "Catalina"
   };
+
+  var appleCategories = [
+    { slug: "books", name: "Books" },
+    { slug: "business", name: "Business" },
+    { slug: "developer-tools", name: "Developer Tools" },
+    { slug: "education", name: "Education" },
+    { slug: "entertainment", name: "Entertainment" },
+    { slug: "finance", name: "Finance" },
+    { slug: "food-drink", name: "Food & Drink" },
+    { slug: "games", name: "Games" },
+    { slug: "graphics-design", name: "Graphics & Design" },
+    { slug: "health-fitness", name: "Health & Fitness" },
+    { slug: "lifestyle", name: "Lifestyle" },
+    { slug: "magazines-newspapers", name: "Magazines & Newspapers" },
+    { slug: "medical", name: "Medical" },
+    { slug: "music", name: "Music" },
+    { slug: "navigation", name: "Navigation" },
+    { slug: "news", name: "News" },
+    { slug: "photo-video", name: "Photo & Video" },
+    { slug: "productivity", name: "Productivity" },
+    { slug: "reference", name: "Reference" },
+    { slug: "safari-extensions", name: "Safari Extensions" },
+    { slug: "shopping", name: "Shopping" },
+    { slug: "social-networking", name: "Social Networking" },
+    { slug: "sports", name: "Sports" },
+    { slug: "travel", name: "Travel" },
+    { slug: "utilities", name: "Utilities" },
+    { slug: "weather", name: "Weather" }
+  ];
+
+  function normalizeAppleCategories(serverCategories) {
+    var bySlug = {};
+    (serverCategories || []).forEach(function (category) {
+      bySlug[category.slug] = category;
+    });
+    return appleCategories.map(function (category, index) {
+      var server = bySlug[category.slug] || {};
+      return {
+        slug: category.slug,
+        name: server.name || category.name,
+        sort_order: server.sort_order || ((index + 1) * 10)
+      };
+    });
+  }
 
   var iconPaths = {
     account: '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-4.2 3-6.3 6.5-6.3s5.8 2.1 6.5 6.3"/>',
@@ -1252,7 +1296,7 @@
   window.addEventListener("hashchange", render);
 
   Promise.all([
-    api("/categories").then(function (payload) { state.categories = payload.categories || []; }),
+    api("/categories").then(function (payload) { state.categories = normalizeAppleCategories(payload.categories || []); }),
     loadCurrentUser()
   ]).then(function () {
     renderSidebar();
