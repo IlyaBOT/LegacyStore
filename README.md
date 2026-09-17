@@ -70,8 +70,7 @@ SwiftUI, Storyboards или ARC как обязательную зависимо
 cp .env.example .env
 ```
 
-Значения по умолчанию подходят для локального запуска. Для production секреты из
-`.env.example` использовать нельзя.
+Значения по умолчанию подходят для локального запуска. Для production секреты из `.env.example` использовать нельзя.
 
 ## Запуск backend и web UI через Docker Compose
 
@@ -86,9 +85,7 @@ make dev-up
 - web client: `http://localhost:8081`;
 - web client HTTPS: `https://localhost:8443`.
 
-Авторизация работает только через HTTPS endpoint. Для локальной разработки
-`make dev-up` генерирует self-signed certificate для `localhost` в
-`admin-web/certs`.
+Авторизация работает только через HTTPS endpoint. Для локальной разработки `make dev-up` генерирует self-signed certificate для `localhost` в `admin-web/certs`.
 
 Остановить окружение:
 
@@ -119,9 +116,7 @@ make seed
 
 ## Сборка клиента
 
-Objective-C/AppKit client skeleton будет добавлен отдельной задачей. Текущий
-скрипт проверяет базовые параметры и явно завершится ошибкой, если Xcode project
-еще отсутствует:
+Objective-C/AppKit client skeleton будет добавлен отдельной задачей. Текущий скрипт проверяет базовые параметры и явно завершится ошибкой, если Xcode project еще отсутствует:
 
 ```sh
 make client
@@ -137,8 +132,7 @@ Backend:
 make backend
 ```
 
-Сборка backend выполняет `gofmt`, `go test` и `go build` внутри Docker/backend
-container и кладет бинарь в `./build/legacystore-backend`.
+Сборка backend выполняет `gofmt`, `go test` и `go build` внутри Docker/backend container и кладет бинарь в `./build/legacystore-backend`.
 
 Web UI:
 
@@ -177,19 +171,10 @@ make test-api
 
 ## Безопасность
 
-Legacy-клиент не должен получать или отправлять основной пароль аккаунта.
-Допускаются только app-specific legacy passwords и только через рабочий HTTPS/TLS.
-Если TLS validation fails, authentication must be blocked.
+Legacy-клиент не должен получать или отправлять основной пароль аккаунта. Допускаются только app-specific legacy passwords и только через рабочий HTTPS/TLS. Если TLS validation fails, authentication must be blocked.
 
-Uploads разрешены только через HTTPS web UI. Legacy-клиент не должен загружать
-software artifacts. Hash mismatch не должен автоматически удалять скачанный файл,
-и скачанные файлы не должны auto-open после download.
+Uploads разрешены только через HTTPS web UI. Legacy-клиент не должен загружать software artifacts. Hash mismatch не должен автоматически удалять скачанный файл, и скачанные файлы не должны auto-open после download.
 
 ## Статус проекта
 
-Текущий статус: backend public catalog MVP и static web client. Реализованы
-структура проекта, Docker Compose, Go backend, PostgreSQL migrations,
-compatibility engine, seed data, curl/jq API tests и web UI для
-каталога, категорий, поиска, app detail, auth/account flows, reviews,
-ratings, legacy passwords, admin/moderation screens. Objective-C client
-skeleton, uploads, OAuth, P2P и CDN еще не реализованы.
+Текущий статус: backend public catalog MVP и static web client. Реализованы структура проекта, Docker Compose, Go backend, PostgreSQL migrations, compatibility engine, seed data, curl/jq API tests и web UI для каталога, категорий, поиска, app detail, auth/account flows, reviews, ratings, legacy passwords, admin/moderation screens. Objective-C client skeleton, uploads, OAuth, P2P и CDN еще не реализованы.
