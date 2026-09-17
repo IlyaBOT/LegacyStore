@@ -1,6 +1,7 @@
 BEGIN;
 
 TRUNCATE TABLE
+    download_events,
     legacy_devices,
     legacy_passwords,
     sessions,
@@ -220,6 +221,33 @@ INSERT INTO artifact_mirrors (artifact_id, mirror_type, url, priority, is_active
 SELECT id, 'official', primary_download_url, 10, true
 FROM artifacts
 WHERE primary_download_url IS NOT NULL;
+
+
+-- Stable download history for ranking/feed integration tests:
+-- Pixelmator wins all-time, VLC wins the last seven days, Transmission wins the last 24 hours.
+INSERT INTO download_events (artifact_id, app_id, created_at)
+SELECT ar.id, a.id, now() - interval '45 days' - (g * interval '1 minute')
+FROM apps a
+JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
+JOIN artifacts ar ON ar.app_version_id = av.id
+CROSS JOIN generate_series(1, 50) AS g
+WHERE a.slug = 'pixelmator';
+
+INSERT INTO download_events (artifact_id, app_id, created_at)
+SELECT ar.id, a.id, now() - interval '2 days' - (g * interval '1 minute')
+FROM apps a
+JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
+JOIN artifacts ar ON ar.app_version_id = av.id
+CROSS JOIN generate_series(1, 30) AS g
+WHERE a.slug = 'vlc';
+
+INSERT INTO download_events (artifact_id, app_id, created_at)
+SELECT ar.id, a.id, now() - interval '6 hours' - (g * interval '1 minute')
+FROM apps a
+JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
+JOIN artifacts ar ON ar.app_version_id = av.id
+CROSS JOIN generate_series(1, 12) AS g
+WHERE a.slug = 'transmission';
 
 INSERT INTO icons (app_id, image_url, width, height)
 SELECT a.id, sa.icon_url, 512, 512
