@@ -195,7 +195,7 @@ func parseBinaryPlist(data []byte) (any, error) {
 	offsets := make([]uint64, numObjects)
 	for i := uint64(0); i < numObjects; i++ {
 		start := offsetTableOffset + i*uint64(offsetSize)
-		offsets[i] = readUnsigned(data[start:start+uint64(offsetSize)])
+		offsets[i] = readUnsigned(data[start : start+uint64(offsetSize)])
 		if offsets[i] >= uint64(len(data)-32) {
 			return nil, errors.New("binary plist object offset is out of bounds")
 		}
