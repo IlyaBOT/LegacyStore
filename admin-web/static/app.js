@@ -1342,9 +1342,10 @@
     iconNode.innerHTML = metadata.icon_data_url ?
       '<img src="' + escapeHTML(metadata.icon_data_url) + '" alt="">' :
       '<span>' + escapeHTML((metadata.name || "APP").slice(0, 3).toUpperCase()) + '</span>';
+    var warningCount = (inspection.warnings || []).length;
     statusNode.textContent = state.uploadContext.inspecting ? "Reading metadata..." :
-      (inspection.metadata ? "Metadata inspected" : "Waiting for file");
-    statusNode.classList.toggle("active", !!inspection.metadata && !state.uploadContext.inspecting);
+      (inspection.metadata ? (warningCount ? "Metadata partially read" : "Metadata inspected") : "Waiting for file");
+    statusNode.classList.toggle("active", !!inspection.metadata && !state.uploadContext.inspecting && warningCount === 0);
   }
 
   function applyUploadInspection(inspection) {
