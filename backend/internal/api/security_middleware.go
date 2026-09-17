@@ -96,7 +96,9 @@ func isCredentialEndpoint(req *http.Request) bool {
 	case "/api/v1/auth/login",
 		"/api/v1/auth/register",
 		"/api/v1/auth/legacy/login",
-		"/api/v1/auth/2fa/verify":
+		"/api/v1/auth/2fa/verify",
+		"/api/v1/auth/recovery/request",
+		"/api/v1/auth/recovery/reset":
 		return true
 	default:
 		return false
