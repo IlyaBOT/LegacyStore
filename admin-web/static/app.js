@@ -14,7 +14,7 @@
     pendingTwoFactorLogin: null,
     twoFactorSetup: null,
     recoveryCodes: [],
-    uploadContext: { appId: "", versionId: "" }
+    uploadContext: { appId: "", versionId: "", file: null, inspection: null, iconDataURL: "" }
   };
 
   var main = document.getElementById("main");
@@ -41,6 +41,50 @@
     "10.14": "Mojave",
     "10.15": "Catalina"
   };
+
+  var appleCategories = [
+    { slug: "books", name: "Books" },
+    { slug: "business", name: "Business" },
+    { slug: "developer-tools", name: "Developer Tools" },
+    { slug: "education", name: "Education" },
+    { slug: "entertainment", name: "Entertainment" },
+    { slug: "finance", name: "Finance" },
+    { slug: "food-drink", name: "Food & Drink" },
+    { slug: "games", name: "Games" },
+    { slug: "graphics-design", name: "Graphics & Design" },
+    { slug: "health-fitness", name: "Health & Fitness" },
+    { slug: "lifestyle", name: "Lifestyle" },
+    { slug: "magazines-newspapers", name: "Magazines & Newspapers" },
+    { slug: "medical", name: "Medical" },
+    { slug: "music", name: "Music" },
+    { slug: "navigation", name: "Navigation" },
+    { slug: "news", name: "News" },
+    { slug: "photo-video", name: "Photo & Video" },
+    { slug: "productivity", name: "Productivity" },
+    { slug: "reference", name: "Reference" },
+    { slug: "safari-extensions", name: "Safari Extensions" },
+    { slug: "shopping", name: "Shopping" },
+    { slug: "social-networking", name: "Social Networking" },
+    { slug: "sports", name: "Sports" },
+    { slug: "travel", name: "Travel" },
+    { slug: "utilities", name: "Utilities" },
+    { slug: "weather", name: "Weather" }
+  ];
+
+  function normalizeAppleCategories(serverCategories) {
+    var bySlug = {};
+    (serverCategories || []).forEach(function (category) {
+      bySlug[category.slug] = category;
+    });
+    return appleCategories.map(function (category, index) {
+      var server = bySlug[category.slug] || {};
+      return {
+        slug: category.slug,
+        name: server.name || category.name,
+        sort_order: server.sort_order || ((index + 1) * 10)
+      };
+    });
+  }
 
   var iconPaths = {
     account: '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-4.2 3-6.3 6.5-6.3s5.8 2.1 6.5 6.3"/>',
@@ -641,8 +685,9 @@
 
   function twoFactorLoginForm(email) {
     return '<div class="auth-window auth-window-small"><section class="account-panel auth-panel"><h2>Two-Factor Authentication</h2><p class="auth-summary">' + escapeHTML(email) + '</p>' +
-      '<form id="twoFactorLoginForm"><div class="two-factor-choice"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></div>' +
-      '<span class="or">or</span><div class="form-row"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code"></div></div>' +
+      '<form id="twoFactorLoginForm"><div class="second-factor-inline"><div class="form-row field-totp"><label>Authenticator code</label>' +
+      '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456"><small>6 digits.</small></div>' +
+      '<span class="or">or</span><div class="form-row field-recovery"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX"></div></div>' +
       '<div id="twoFactorLoginNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Verify</button>' +
       '<button class="metal-button" id="cancel2FALoginButton" type="button">Back</button></div></form></section></div>';
   }
@@ -663,20 +708,32 @@
 
   function profilePanel() {
     var user = state.currentUser || {};
-    return '<div class="auth-grid"><section class="account-panel"><h2>Profile</h2><form id="profileForm">' +
-      '<div class="form-row"><label>Nickname</label><input name="nickname" type="text" value="' + escapeHTML(user.nickname || "") + '"></div>' +
-      '<div class="form-row"><label>Avatar URL</label><input name="avatar_url" type="url" value="' + escapeHTML(user.avatar_url || "") + '"></div>' +
-      '<div class="form-row"><label>Email</label><input type="email" disabled value="' + escapeHTML(user.email || "") + '"></div>' +
-      '<div class="form-row"><label>Roles</label><input type="text" disabled value="' + escapeHTML(rolesOf(user).join(", ")) + '"></div>' +
-      '<div id="profileNotice" class="form-message"></div><button class="blue-button" type="submit">Save</button></form></section>' +
-      '<section class="account-panel"><h2>Account</h2><ul class="setting-list"><li><span>Email verified</span><span>' + (user.email_verified ? "Yes" : "No") + '</span></li>' +
-      '<li><span>Two-factor authentication</span><span>' + (user.two_factor_enabled ? "Enabled" : "Off") + "</span></li></ul></section></div>";
+    var initials = String(user.nickname || user.email || "LS").split(/\s+/).map(function (part) { return part.charAt(0); }).join("").slice(0, 2).toUpperCase();
+    var avatar = user.avatar_url ?
+      '<img class="profile-avatar-image" src="' + escapeHTML(user.avatar_url) + '" alt="">' :
+      '<span class="profile-avatar-fallback">' + escapeHTML(initials) + '</span>';
+    return '<div class="profile-bento">' +
+      '<section class="bento-card profile-identity-card"><div class="profile-avatar">' + avatar + '</div><div class="profile-identity-copy"><h2>' +
+      escapeHTML(user.nickname || "LegacyStore User") + '</h2><p>' + escapeHTML(user.email || "") + '</p><div class="profile-role-row">' +
+      rolesOf(user).map(function (role) { return '<span class="role-chip">' + escapeHTML(role) + '</span>'; }).join("") + '</div></div></section>' +
+      '<section class="bento-card profile-edit-card"><h2>Profile details</h2><p class="panel-help">Public nickname and optional avatar used on reviews and account pages.</p>' +
+      '<form id="profileForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Nickname</label><input name="nickname" type="text" maxlength="80" ' +
+      'placeholder="Steve Jobs" value="' + escapeHTML(user.nickname || "") + '"><small>Shown next to your reviews and submissions.</small></div>' +
+      '<div class="form-row field-wide"><label>Avatar URL</label><input name="avatar_url" type="url" placeholder="https://example.com/avatar.png" value="' +
+      escapeHTML(user.avatar_url || "") + '"><small>HTTPS image URL. Leave empty to use your initials.</small></div></div>' +
+      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button></div></form></section>' +
+      '<section class="bento-card profile-status-card"><h2>Account</h2><div class="account-metric-grid">' +
+      '<div class="account-metric"><span>Email</span><strong>' + (user.email_verified ? "Verified" : "Not verified") + '</strong></div>' +
+      '<div class="account-metric"><span>Two-factor authentication</span><strong>' + (user.two_factor_enabled ? "Enabled" : "Off") + '</strong></div></div>' +
+      '<button class="metal-button" data-route="security" type="button">Security settings</button></section></div>';
   }
 
   function secondFactorFields(prefix) {
-    return '<div class="two-factor-choice"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></div>' +
-      '<span class="or">or</span><div class="form-row"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code"></div></div>' +
-      '<div class="panel-help">Use one second factor when 2FA is enabled.</div>' + (prefix ? "" : "");
+    return '<div class="second-factor-inline"><div class="form-row field-totp"><label>Authenticator code</label>' +
+      '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456">' +
+      '<small>6 digits from your authenticator.</small></div><span class="or">or</span>' +
+      '<div class="form-row field-recovery"><label>Recovery code</label><input name="recovery_code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">' +
+      '<small>Use one recovery code instead.</small></div></div>' + (prefix ? "" : "");
   }
 
   function recoveryCodesHTML() {
@@ -689,29 +746,38 @@
     var enabled = !!(state.currentUser && state.currentUser.two_factor_enabled);
     var twoFactorBody;
     if (!enabled) {
-      twoFactorBody = '<p class="panel-help">Setup requires your current account password. After scanning the secret, confirm with a TOTP code.</p>' +
-        '<form id="setup2FAForm"><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
+      twoFactorBody = '<p class="panel-help">Protect the account with a six-digit TOTP code. Your current password is required before a secret is generated.</p>' +
+        '<form id="setup2FAForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Current password</label>' +
+        '<input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div></div>' +
         '<div class="form-actions"><button class="metal-button" type="submit">Generate 2FA secret</button></div></form>' +
-        (state.twoFactorSetup ? '<div class="secret-box"><strong>Secret</strong><div class="mono">' + escapeHTML(state.twoFactorSetup.secret || "") + '</div><div class="mono">' +
-          escapeHTML(state.twoFactorSetup.otpauth_url || "") + '</div></div><form id="verify2FAForm"><div class="form-row"><label>Authenticator code</label><input name="totp_code" inputmode="numeric" autocomplete="one-time-code" required></div>' +
-          '<div class="form-actions"><button class="blue-button" type="submit">Enable 2FA</button></div></form>' : "");
+        (state.twoFactorSetup ? '<div class="secret-box"><strong>Authenticator secret</strong><div class="mono">' + escapeHTML(state.twoFactorSetup.secret || "") +
+          '</div><div class="mono secret-url">' + escapeHTML(state.twoFactorSetup.otpauth_url || "") + '</div></div>' +
+          '<form id="verify2FAForm"><div class="compact-field-grid"><div class="form-row field-totp"><label>Confirm code</label>' +
+          '<input name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456" required>' +
+          '<small>Enter the current six-digit code.</small></div></div><div class="form-actions"><button class="blue-button" type="submit">Enable 2FA</button></div></form>' : "");
     } else {
-      twoFactorBody = '<p class="panel-help">2FA is enabled. Recovery codes can replace a TOTP code once each.</p>' + recoveryCodesHTML() +
-        '<form id="regenerateRecoveryCodesForm"><h3>Regenerate recovery codes</h3><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-        secondFactorFields("regenerate") + '<div class="form-actions"><button class="metal-button" type="submit">Regenerate Codes</button></div></form>' +
-        '<form id="disable2FAForm"><h3>Disable 2FA</h3><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-        secondFactorFields("disable") + '<div class="form-actions"><button class="metal-button" type="submit">Disable 2FA</button></div></form>';
+      twoFactorBody = '<p class="panel-help">Two-factor authentication is enabled. Recovery codes are single-use.</p>' + recoveryCodesHTML() +
+        '<div class="security-mini-grid"><form id="regenerateRecoveryCodesForm" class="security-mini-card"><h3>New recovery codes</h3>' +
+        '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+        secondFactorFields("regenerate") + '<div class="form-actions"><button class="metal-button" type="submit">Regenerate</button></div></form>' +
+        '<form id="disable2FAForm" class="security-mini-card danger-zone"><h3>Disable 2FA</h3>' +
+        '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+        secondFactorFields("disable") + '<div class="form-actions"><button class="metal-button" type="submit">Disable 2FA</button></div></form></div>';
     }
 
-    return '<div class="security-stack"><section class="account-panel"><h2>Two-Factor Authentication</h2><ul class="setting-list"><li><span>Status</span><span>' + (enabled ? "Enabled" : "Off") + "</span></li></ul>" +
-      twoFactorBody + '<div id="twoFactorNotice" class="form-message"></div></section>' +
-      '<section class="account-panel"><h2>Change Password</h2><form id="changePasswordForm"><div class="form-grid"><div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>' +
-      '<div class="form-row"><label>New password</label><input name="new_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="span-2">' + secondFactorFields("password") +
-      '</div></div><div id="passwordNotice" class="form-message"></div><button class="blue-button" type="submit">Change Password</button></form></section>' +
-      '<section class="account-panel"><h2>Change Email</h2><form id="changeEmailForm"><div class="form-grid"><div class="form-row"><label>New email</label><input name="new_email" type="email" autocomplete="email" required></div>' +
-      '<div class="form-row"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div><div class="span-2">' + secondFactorFields("email") +
-      '</div></div><div id="emailNotice" class="form-message"></div><button class="blue-button" type="submit">Change Email</button></form></section>' +
-      '<section class="account-panel"><h2>Active Sessions</h2><div id="sessionsList" class="loading">Loading...</div></section></div>';
+    return '<div class="security-bento"><section class="bento-card security-2fa-card"><div class="card-heading-row"><div><h2>Two-Factor Authentication</h2>' +
+      '<p class="card-kicker">' + (enabled ? "Enabled" : "Not enabled") + '</p></div><span class="status-chip ' + (enabled ? "active" : "") + '">' +
+      (enabled ? "Enabled" : "Off") + '</span></div>' + twoFactorBody + '<div id="twoFactorNotice" class="form-message"></div></section>' +
+      '<section class="bento-card security-password-card"><h2>Change Password</h2><p class="panel-help">Other active sessions are revoked after a password change.</p>' +
+      '<form id="changePasswordForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Current password</label>' +
+      '<input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div>' +
+      '<div class="form-row field-medium"><label>New password</label><input name="new_password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></div></div>' +
+      secondFactorFields("password") + '<div id="passwordNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Change Password</button></div></form></section>' +
+      '<section class="bento-card security-email-card"><h2>Change Email</h2><p class="panel-help">The new address must be verified again.</p>' +
+      '<form id="changeEmailForm"><div class="compact-field-grid"><div class="form-row field-wide"><label>New email</label><input name="new_email" type="email" autocomplete="email" placeholder="me@example.com" required></div>' +
+      '<div class="form-row field-medium"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" placeholder="Current password" required></div></div>' +
+      secondFactorFields("email") + '<div id="emailNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Change Email</button></div></form></section>' +
+      '<section class="bento-card security-sessions-card"><h2>Active Sessions</h2><p class="panel-help">Revoke browsers or devices you no longer use.</p><div id="sessionsList" class="loading">Loading...</div></section></div>';
   }
 
   function legacyPasswordsPanel() {
@@ -783,7 +849,10 @@
       csrf_origin_rejected: "The request origin was rejected.",
       forbidden: "Your account does not have permission for this action.",
       unauthorized: "Please sign in again.",
-      rate_limited: "Too many attempts. Try again later."
+      rate_limited: "Too many attempts. Try again later.",
+      metadata_too_large: "Metadata file is too large.",
+      plist_required: "Info.plist was not found in the dropped app bundle.",
+      download_source_unavailable: "No download source is available."
     };
     return messages[code] || code.replace(/_/g, " ");
   }
@@ -794,6 +863,39 @@
     node.textContent = message;
     node.classList.toggle("is-error", !!isError);
     node.classList.toggle("is-success", !isError && !!message);
+  }
+
+  function toastHost() {
+    var host = document.getElementById("toastHost");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "toastHost";
+      host.className = "toast-host";
+      host.setAttribute("aria-live", "polite");
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+
+  function showToast(message, type) {
+    if (!message) { return; }
+    var toast = document.createElement("div");
+    toast.className = "bubble-toast " + (type || "error");
+    toast.textContent = message;
+    toastHost().appendChild(toast);
+    window.setTimeout(function () {
+      if (toast.parentNode) { toast.parentNode.removeChild(toast); }
+    }, 5000);
+  }
+
+  function showInspectionWarnings(warnings) {
+    warnings = warnings || [];
+    warnings.slice(0, 3).forEach(function (warning) {
+      showToast(warning.message || warning.code || "Unknown metadata warning", "error");
+    });
+    if (warnings.length > 3) {
+      showToast("Ещё " + (warnings.length - 3) + " предупреждений по метаданным.", "error");
+    }
   }
 
   function submitAuth(path, data) {
@@ -1028,90 +1130,394 @@
     return '<span class="status-chip ' + escapeHTML(value || "") + '">' + escapeHTML(value || "") + "</span>";
   }
 
+  function uploadCategoryOptions() {
+    return '<option value="">Choose a category...</option>' + state.categories.map(function (category) {
+      return '<option value="' + escapeHTML(category.slug) + '">' + escapeHTML(category.name) + '</option>';
+    }).join("");
+  }
+
+  function slugifyAppName(value) {
+    return String(value || "").trim().toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+  }
+
   function renderUploads() {
     if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
-    main.innerHTML = '<div class="view-title"><h1>Uploads</h1></div><div class="management-stack">' +
-      '<section class="account-panel"><h2>1. Submit Application</h2><p class="panel-help">Trusted submissions remain pending until moderation. Moderators and administrators may publish immediately according to backend policy.</p>' +
-      '<form id="uploadAppForm" class="management-form"><div class="form-grid"><div class="form-row"><label>Slug</label><input name="slug" required></div><div class="form-row"><label>Name</label><input name="name" required></div>' +
-      '<div class="form-row"><label>Bundle ID</label><input name="bundle_id"></div><div class="form-row"><label>Developer</label><input name="developer_name" required></div>' +
-      '<div class="form-row"><label>Category</label><select name="category_slug">' + state.categories.map(function (category) { return '<option value="' + escapeHTML(category.slug) + '">' + escapeHTML(category.name) + "</option>"; }).join("") + '</select></div>' +
-      '<div class="form-row"><label>Summary</label><input name="summary" required></div><div class="form-row span-2"><label>Description</label><textarea name="description"></textarea></div></div>' +
-      '<button class="blue-button" type="submit">Create Submission</button><div id="uploadAppNotice" class="form-message"></div></form></section>' +
-      '<section class="account-panel"><h2>2. Create Version</h2><form id="uploadVersionForm" class="management-form"><div class="form-grid"><div class="form-row"><label>App ID</label><input name="app_id" value="' + escapeHTML(state.uploadContext.appId) + '" required></div>' +
-      '<div class="form-row"><label>Version</label><input name="version" required></div><div class="form-row"><label>Release date</label><input name="release_date" type="date"></div>' +
-      '<div class="form-row"><label><input name="is_recommended" type="checkbox" value="true"> Recommended</label></div><div class="form-row span-2"><label>Changelog</label><textarea name="changelog"></textarea></div></div>' +
-      '<button class="blue-button" type="submit">Create Version</button><div id="uploadVersionNotice" class="form-message"></div></form></section>' +
-      '<section class="account-panel"><h2>3. Upload Artifact</h2><p class="panel-help">The file is streamed into quarantine. SHA-256 is calculated server-side. Publication still requires moderation.</p>' +
-      '<form id="artifactUploadForm" class="management-form"><div class="form-grid"><div class="form-row"><label>Version ID</label><input name="version_id" value="' + escapeHTML(state.uploadContext.versionId) + '" required></div>' +
-      '<div class="form-row"><label>File</label><input name="file" type="file" required></div><div class="form-row"><label>Minimum macOS</label><input name="min_os" value="10.4" required></div>' +
-      '<div class="form-row"><label>Maximum supported</label><input name="max_supported_os"></div><div class="form-row"><label>Maximum tested</label><input name="max_tested_os" value="10.15"></div>' +
-      '<div class="form-row"><label>Install notes</label><input name="install_notes"></div></div><div class="filter-bar">' +
-      '<label><input name="arch_i386" type="checkbox" value="true" checked> i386</label><label><input name="arch_x86_64" type="checkbox" value="true" checked> x86_64</label>' +
-      '<label><input name="supports_32bit" type="checkbox" value="true" checked> 32-bit</label><label><input name="supports_64bit" type="checkbox" value="true" checked> 64-bit</label>' +
-      '<label><input name="hard_block_above_max" type="checkbox" value="true"> Hard max OS</label></div><button class="blue-button" type="submit">Upload to Quarantine</button>' +
-      '<div class="upload-progress" id="uploadProgress" hidden><span></span></div><div id="artifactUploadNotice" class="form-message"></div></form></section></div>';
+    main.innerHTML =
+      '<div class="view-title upload-page-title"><div><h1>Upload Application</h1>' +
+      '<p class="view-subtitle">Drop a Macintosh package, review detected metadata, then submit it to the catalog.</p></div></div>' +
+      '<form id="uploadSubmissionForm" class="upload-bento">' +
+      '<section class="bento-card upload-package-card">' +
+      '<div class="card-heading-row"><div><h2>Application package</h2><p class="card-kicker">DMG, PKG, ZIP or an app bundle for metadata detection</p></div>' +
+      '<span class="status-chip" id="inspectionStatus">Waiting for file</span></div>' +
+      '<input id="artifactFileInput" name="file" type="file" accept=".dmg,.pkg,.mpkg,.zip,.app" hidden>' +
+      '<button class="artifact-dropzone" id="artifactDropZone" type="button">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>' +
+      '<strong>Drop an application package here</strong><span>or click to choose a file</span>' +
+      '<small>LegacyStore will try to read Info.plist, bundle ID, version, category, minimum OS and application icon.</small></button>' +
+      '<div class="detected-package" id="detectedPackage"><div class="detected-icon" id="detectedIcon"><span>APP</span></div>' +
+      '<div><strong id="detectedFileName">No file selected</strong><p id="detectedFileMeta">Metadata has not been inspected yet.</p></div></div>' +
+      '</section>' +
+
+      '<section class="bento-card upload-app-card"><h2>Application</h2><p class="panel-help">Catalog identity. Detected values are filled automatically and remain editable.</p>' +
+      '<div class="compact-field-grid upload-app-fields">' +
+      '<div class="form-row field-large"><label>App Name <span class="required-dot">*</span></label><input name="name" type="text" maxlength="160" placeholder="My cool Macintosh app!" required>' +
+      '<small>The public application name shown in the catalog.</small></div>' +
+      '<div class="form-row field-medium"><label>Developer <span class="required-dot">*</span></label><input name="developer_name" type="text" maxlength="160" placeholder="Steve Jobs" required>' +
+      '<small>Company, team or author responsible for the application.</small></div>' +
+      '<div class="form-row field-wide"><label>Bundle ID</label><input name="bundle_id" type="text" maxlength="255" placeholder="com.example.mycoolapp">' +
+      '<small>Usually CFBundleIdentifier from Contents/Info.plist.</small></div>' +
+      '<div class="form-row field-medium"><label>Category <span class="required-dot">*</span></label><select name="category_slug" required>' + uploadCategoryOptions() + '</select>' +
+      '<small>Uses Apple Mac App Store categories.</small></div>' +
+      '<div class="form-row field-medium"><label>Catalog slug <span class="required-dot">*</span></label><input name="slug" type="text" maxlength="80" placeholder="my-cool-macintosh-app" required>' +
+      '<small>Stable URL identifier; generated from the app name if left blank.</small></div>' +
+      '<div class="form-row field-large"><label>Summary <span class="required-dot">*</span></label><input name="summary" type="text" maxlength="240" placeholder="A short one-line description of the application" required>' +
+      '<small>Keep it short; this appears in catalog lists and search results.</small></div>' +
+      '<div class="form-row field-full"><label>Description</label><textarea name="description" placeholder="What does this application do? Mention important legacy-Mac details, limitations and notable features."></textarea>' +
+      '<small>Optional long description for the application page.</small></div></div></section>' +
+
+      '<section class="bento-card upload-release-card"><h2>Release</h2><p class="panel-help">Version information for this uploaded build.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-version"><label>Version <span class="required-dot">*</span></label><input name="version" type="text" maxlength="64" placeholder="1.0.0" required>' +
+      '<small>CFBundleShortVersionString when available.</small></div>' +
+      '<div class="form-row field-date"><label>Release date</label><input name="release_date" type="date"><small>Optional original release date.</small></div>' +
+      '<label class="switch-card"><input name="is_recommended" type="checkbox" value="true" checked><span><strong>Recommended build</strong><small>Prefer this release when it matches the selected Mac.</small></span></label>' +
+      '<div class="form-row field-full"><label>Changelog</label><textarea name="changelog" placeholder="What changed in this release?"></textarea></div></div></section>' +
+
+      '<section class="bento-card upload-compat-card"><h2>Compatibility</h2><p class="panel-help">Use exact patch versions when the application requires them, for example 10.6.8.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-os"><label>Minimum OS X <span class="required-dot">*</span></label><input name="min_os" type="text" value="10.4" placeholder="10.6.8" required>' +
+      '<small>Oldest exact system release supported.</small></div>' +
+      '<div class="form-row field-os"><label>Maximum supported</label><input name="max_supported_os" type="text" placeholder="10.14.6"><small>Leave empty when no hard maximum is known.</small></div>' +
+      '<div class="form-row field-os"><label>Maximum tested</label><input name="max_tested_os" type="text" value="10.15" placeholder="10.15.7"><small>Newest system on which this build was tested.</small></div>' +
+      '<div class="form-row field-full"><label>Install notes</label><input name="install_notes" type="text" placeholder="Requires Java 6, Rosetta, a reboot, or another special step..."></div></div>' +
+      '<div class="capability-grid"><label><input name="arch_i386" type="checkbox" value="true" checked><span><strong>i386</strong><small>32-bit Intel CPU code</small></span></label>' +
+      '<label><input name="arch_x86_64" type="checkbox" value="true" checked><span><strong>x86_64</strong><small>64-bit Intel CPU code</small></span></label>' +
+      '<label><input name="supports_32bit" type="checkbox" value="true" checked><span><strong>32-bit OS</strong><small>Runs in 32-bit environments</small></span></label>' +
+      '<label><input name="supports_64bit" type="checkbox" value="true" checked><span><strong>64-bit OS</strong><small>Runs in 64-bit environments</small></span></label>' +
+      '<label><input name="hard_block_above_max" type="checkbox" value="true"><span><strong>Hard maximum</strong><small>Block systems above maximum supported</small></span></label></div></section>' +
+
+      '<section class="bento-card upload-submit-card"><div><h2>Submit to LegacyStore</h2><p>Trusted uploads are quarantined until moderation. SHA-256 is calculated by the server.</p></div>' +
+      '<div class="upload-submit-actions"><div class="upload-progress" id="uploadProgress" hidden><span></span></div>' +
+      '<button class="blue-button upload-primary-button" id="submitUploadButton" type="submit">Create Application & Upload</button></div>' +
+      '<div id="uploadWorkflowNotice" class="form-message"></div></section></form>' +
+      '<div class="upload-drop-overlay" id="uploadDropOverlay" hidden><div class="upload-drop-overlay-card">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>' +
+      '<strong>Отпустите файл чтобы загрузить</strong><span>LegacyStore попробует автоматически прочитать метаданные приложения.</span></div></div>';
+
     bindUploadForms();
-    setStatus("Showing: Management", "Uploads", "HTTPS required");
+    updateDetectedPackage();
+    setStatus("Showing: Management", "Upload Application", "HTTPS required");
     renderSidebar();
   }
 
+  function updateDetectedPackage() {
+    var nameNode = document.getElementById("detectedFileName");
+    var metaNode = document.getElementById("detectedFileMeta");
+    var iconNode = document.getElementById("detectedIcon");
+    var statusNode = document.getElementById("inspectionStatus");
+    if (!nameNode || !metaNode || !iconNode || !statusNode) { return; }
+
+    var file = state.uploadContext.file;
+    var inspection = state.uploadContext.inspection || {};
+    var metadata = inspection.metadata || {};
+    nameNode.textContent = file ? file.name : (inspection.file_name || "No file selected");
+    if (file) {
+      metaNode.textContent = formatSize(file.size) + (inspection.package_type ? " · " + String(inspection.package_type).toUpperCase() : "");
+    } else if (inspection.package_type === "app") {
+      metaNode.textContent = "Raw .app bundle inspected for metadata only. Choose a DMG, PKG or ZIP to submit the artifact.";
+    } else {
+      metaNode.textContent = "Metadata has not been inspected yet.";
+    }
+
+    iconNode.innerHTML = metadata.icon_data_url ?
+      '<img src="' + escapeHTML(metadata.icon_data_url) + '" alt="">' :
+      '<span>' + escapeHTML((metadata.name || "APP").slice(0, 3).toUpperCase()) + '</span>';
+    statusNode.textContent = state.uploadContext.inspecting ? "Reading metadata..." :
+      (inspection.metadata ? "Metadata inspected" : "Waiting for file");
+    statusNode.classList.toggle("active", !!inspection.metadata && !state.uploadContext.inspecting);
+  }
+
+  function applyUploadInspection(inspection) {
+    inspection = inspection || {};
+    state.uploadContext.inspection = inspection;
+    state.uploadContext.iconDataURL = inspection.metadata && inspection.metadata.icon_data_url ? inspection.metadata.icon_data_url : "";
+    var form = document.getElementById("uploadSubmissionForm");
+    if (!form) { return; }
+    var metadata = inspection.metadata || {};
+
+    function setValue(name, value) {
+      if (value == null || value === "") { return; }
+      var input = form.querySelector('[name="' + name + '"]');
+      if (input) { input.value = value; }
+    }
+
+    setValue("name", metadata.name);
+    setValue("bundle_id", metadata.bundle_id);
+    setValue("version", metadata.version);
+    setValue("min_os", metadata.minimum_os);
+    if (metadata.category_slug) {
+      var category = form.querySelector('[name="category_slug"]');
+      if (category && Array.prototype.some.call(category.options, function (option) { return option.value === metadata.category_slug; })) {
+        category.value = metadata.category_slug;
+      }
+    }
+    var slug = form.querySelector('[name="slug"]');
+    if (slug && (!slug.value || slug.dataset.generated === "true") && metadata.name) {
+      slug.value = slugifyAppName(metadata.name);
+      slug.dataset.generated = "true";
+    }
+    updateDetectedPackage();
+    showInspectionWarnings(inspection.warnings || []);
+  }
+
+  function inspectArtifactFile(file) {
+    if (!file) { return; }
+    state.uploadContext.appId = "";
+    state.uploadContext.versionId = "";
+    state.uploadContext.file = file;
+    state.uploadContext.inspecting = true;
+    state.uploadContext.inspection = { file_name: file.name, package_type: file.name.split(".").pop().toLowerCase(), metadata: {} };
+    updateDetectedPackage();
+
+    var formData = new FormData();
+    formData.append("file", file, file.name);
+    api("/admin/uploads/inspect", { method: "POST", body: formData }).then(function (payload) {
+      state.uploadContext.inspecting = false;
+      applyUploadInspection(payload.inspection || {});
+    }).catch(function (error) {
+      state.uploadContext.inspecting = false;
+      updateDetectedPackage();
+      showToast("Не удалось прочитать метаданные: " + humanError(error), "error");
+    });
+  }
+
+  function readDirectoryEntries(directoryEntry) {
+    return new Promise(function (resolve, reject) {
+      var reader = directoryEntry.createReader();
+      var entries = [];
+      function nextBatch() {
+        reader.readEntries(function (batch) {
+          if (!batch.length) { resolve(entries); return; }
+          entries = entries.concat(Array.prototype.slice.call(batch));
+          nextBatch();
+        }, reject);
+      }
+      nextBatch();
+    });
+  }
+
+  function entryAsFile(entry) {
+    return new Promise(function (resolve, reject) { entry.file(resolve, reject); });
+  }
+
+  function inspectDroppedAppBundle(entry) {
+    state.uploadContext.appId = "";
+    state.uploadContext.versionId = "";
+    state.uploadContext.file = null;
+    state.uploadContext.inspecting = true;
+    state.uploadContext.inspection = { file_name: entry.name, package_type: "app", metadata: {} };
+    updateDetectedPackage();
+
+    return readDirectoryEntries(entry).then(function (rootEntries) {
+      var contents = rootEntries.find(function (item) { return item.isDirectory && item.name === "Contents"; });
+      if (!contents) { throw new Error("Contents directory not found"); }
+      return readDirectoryEntries(contents);
+    }).then(function (contentsEntries) {
+      var plistEntry = contentsEntries.find(function (item) { return item.isFile && item.name === "Info.plist"; });
+      var resources = contentsEntries.find(function (item) { return item.isDirectory && item.name === "Resources"; });
+      if (!plistEntry) { throw new Error("Info.plist not found"); }
+      return Promise.all([
+        entryAsFile(plistEntry),
+        resources ? readDirectoryEntries(resources).then(function (entries) {
+          var candidates = entries.filter(function (item) { return item.isFile && /\.(icns|png)$/i.test(item.name); });
+          if (!candidates.length) { return null; }
+          var preferred = candidates.find(function (item) { return /\.icns$/i.test(item.name); }) || candidates[0];
+          return entryAsFile(preferred);
+        }) : Promise.resolve(null)
+      ]);
+    }).then(function (parts) {
+      var formData = new FormData();
+      formData.append("plist", parts[0], "Info.plist");
+      if (parts[1]) { formData.append("icon", parts[1], parts[1].name); }
+      return api("/admin/uploads/inspect-app-bundle", { method: "POST", body: formData });
+    }).then(function (payload) {
+      state.uploadContext.inspecting = false;
+      var inspection = payload.inspection || {};
+      inspection.file_name = entry.name;
+      applyUploadInspection(inspection);
+      showToast("Метаданные .app прочитаны. Для загрузки самого приложения упакуйте bundle в DMG, PKG или ZIP.", "error");
+    }).catch(function (error) {
+      state.uploadContext.inspecting = false;
+      updateDetectedPackage();
+      showToast("Не удалось прочитать .app bundle: " + (error.message || humanError(error)), "error");
+    });
+  }
+
+  function bindUploadDropZone() {
+    var dropZone = document.getElementById("artifactDropZone");
+    var fileInput = document.getElementById("artifactFileInput");
+    var overlay = document.getElementById("uploadDropOverlay");
+    if (!dropZone || !fileInput || !overlay) { return; }
+
+    dropZone.addEventListener("click", function () { fileInput.click(); });
+    dropZone.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+    fileInput.addEventListener("change", function () {
+      if (fileInput.files && fileInput.files[0]) { inspectArtifactFile(fileInput.files[0]); }
+    });
+
+    var dragDepth = 0;
+    main.ondragenter = function (event) {
+      event.preventDefault();
+      dragDepth += 1;
+      overlay.hidden = false;
+    };
+    main.ondragover = function (event) {
+      event.preventDefault();
+      if (event.dataTransfer) { event.dataTransfer.dropEffect = "copy"; }
+    };
+    main.ondragleave = function (event) {
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) { overlay.hidden = true; }
+    };
+    main.ondrop = function (event) {
+      event.preventDefault();
+      dragDepth = 0;
+      overlay.hidden = true;
+      var transfer = event.dataTransfer;
+      if (!transfer) { return; }
+      var item = transfer.items && transfer.items[0];
+      var entry = item && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (entry && entry.isDirectory && /\.app$/i.test(entry.name)) {
+        inspectDroppedAppBundle(entry);
+        return;
+      }
+      if (transfer.files && transfer.files[0]) {
+        inspectArtifactFile(transfer.files[0]);
+      }
+    };
+  }
+
+  function buildArtifactFormData(form, file) {
+    var formData = new FormData();
+    formData.append("file", file, file.name);
+    ["min_os", "max_supported_os", "max_tested_os", "install_notes"].forEach(function (name) {
+      var input = form.querySelector('[name="' + name + '"]');
+      formData.append(name, input ? input.value || "" : "");
+    });
+    ["arch_i386", "arch_x86_64", "supports_32bit", "supports_64bit", "hard_block_above_max"].forEach(function (name) {
+      var input = form.querySelector('[name="' + name + '"]');
+      formData.append(name, input && input.checked ? "true" : "false");
+    });
+    return formData;
+  }
+
+  function maybeSaveDetectedIcon(appId, versionId, form) {
+    var inspection = state.uploadContext.inspection || {};
+    var metadata = inspection.metadata || {};
+    if (!metadata.icon_data_url) { return Promise.resolve(); }
+    return jsonRequest("POST", "/admin/apps/" + encodeURIComponent(appId) + "/icons", {
+      app_version_id: Number(versionId || 0),
+      image_url: metadata.icon_data_url,
+      min_os: form.querySelector('[name="min_os"]').value || "",
+      max_os: form.querySelector('[name="max_supported_os"]').value || "",
+      width: Number(metadata.icon_width || 0),
+      height: Number(metadata.icon_height || 0)
+    }).catch(function (error) {
+      showToast("Иконка распознана, но сохранить её не удалось: " + humanError(error), "error");
+    });
+  }
+
   function bindUploadForms() {
-    var appForm = document.getElementById("uploadAppForm");
-    var versionForm = document.getElementById("uploadVersionForm");
-    var artifactForm = document.getElementById("artifactUploadForm");
-    if (appForm) {
-      appForm.addEventListener("submit", function (event) {
-        event.preventDefault();
-        jsonRequest("POST", "/admin/apps", formJSON(appForm)).then(function (payload) {
-          state.uploadContext.appId = String(payload.app.id);
-          showMessage("uploadAppNotice", "Submission created as " + payload.app.moderation_status + ". App ID: " + payload.app.id, false);
-          document.querySelector('#uploadVersionForm [name="app_id"]').value = payload.app.id;
-        }).catch(function (error) { showMessage("uploadAppNotice", humanError(error), true); });
+    var form = document.getElementById("uploadSubmissionForm");
+    if (!form) { return; }
+    bindUploadDropZone();
+
+    var nameInput = form.querySelector('[name="name"]');
+    var slugInput = form.querySelector('[name="slug"]');
+    if (nameInput && slugInput) {
+      nameInput.addEventListener("input", function () {
+        if (!slugInput.value || slugInput.dataset.generated === "true") {
+          slugInput.value = slugifyAppName(nameInput.value);
+          slugInput.dataset.generated = "true";
+        }
       });
+      slugInput.addEventListener("input", function () { slugInput.dataset.generated = "false"; });
     }
-    if (versionForm) {
-      versionForm.addEventListener("submit", function (event) {
-        event.preventDefault();
-        var data = formJSON(versionForm);
-        var appId = data.app_id;
-        delete data.app_id;
-        data.is_recommended = !!versionForm.querySelector('[name="is_recommended"]:checked');
-        jsonRequest("POST", "/admin/apps/" + encodeURIComponent(appId) + "/versions", data).then(function (payload) {
-          state.uploadContext.versionId = String(payload.version.id);
-          showMessage("uploadVersionNotice", "Version created. Version ID: " + payload.version.id, false);
-          document.querySelector('#artifactUploadForm [name="version_id"]').value = payload.version.id;
-        }).catch(function (error) { showMessage("uploadVersionNotice", humanError(error), true); });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var file = state.uploadContext.file;
+      if (!file) {
+        showToast("Выберите DMG, PKG или ZIP файл. Raw .app можно использовать для чтения метаданных, но не как браузерный artifact.", "error");
+        return;
+      }
+
+      var button = document.getElementById("submitUploadButton");
+      var progress = document.getElementById("uploadProgress");
+      var progressBar = progress.querySelector("span");
+      button.disabled = true;
+      progress.hidden = false;
+      progressBar.style.width = "8%";
+      showMessage("uploadWorkflowNotice", "Creating application record...", false);
+
+      var data = formJSON(form);
+      var appPayload = {
+        slug: data.slug,
+        name: data.name,
+        bundle_id: data.bundle_id || "",
+        developer_name: data.developer_name,
+        category_slug: data.category_slug,
+        summary: data.summary,
+        description: data.description || ""
+      };
+      var appPromise = state.uploadContext.appId ?
+        Promise.resolve({ app: { id: state.uploadContext.appId, moderation_status: "pending" } }) :
+        jsonRequest("POST", "/admin/apps", appPayload);
+
+      appPromise.then(function (payload) {
+        state.uploadContext.appId = String(payload.app.id);
+        progressBar.style.width = "28%";
+        showMessage("uploadWorkflowNotice", "Creating release...", false);
+        if (state.uploadContext.versionId) {
+          return { version: { id: state.uploadContext.versionId } };
+        }
+        return jsonRequest("POST", "/admin/apps/" + encodeURIComponent(payload.app.id) + "/versions", {
+          version: data.version,
+          release_date: data.release_date || "",
+          changelog: data.changelog || "",
+          is_recommended: !!form.querySelector('[name="is_recommended"]:checked')
+        });
+      }).then(function (payload) {
+        state.uploadContext.versionId = String(payload.version.id);
+        progressBar.style.width = "48%";
+        showMessage("uploadWorkflowNotice", "Uploading package to quarantine...", false);
+        return api("/admin/versions/" + encodeURIComponent(payload.version.id) + "/upload", {
+          method: "POST",
+          body: buildArtifactFormData(form, file)
+        });
+      }).then(function (payload) {
+        progressBar.style.width = "86%";
+        showMessage("uploadWorkflowNotice", "Saving detected icon...", false);
+        return maybeSaveDetectedIcon(state.uploadContext.appId, state.uploadContext.versionId, form).then(function () { return payload; });
+      }).then(function (payload) {
+        progressBar.style.width = "100%";
+        showMessage("uploadWorkflowNotice", "Uploaded to quarantine. SHA-256: " + payload.upload.sha256 + ". Artifact ID: " + payload.artifact.id, false);
+        showToast("Application uploaded successfully and sent to moderation.", "success");
+        button.textContent = "Uploaded";
+      }).catch(function (error) {
+        button.disabled = false;
+        progress.hidden = true;
+        showMessage("uploadWorkflowNotice", humanError(error), true);
+        showToast("Upload failed: " + humanError(error), "error");
       });
-    }
-    if (artifactForm) {
-      artifactForm.addEventListener("submit", function (event) {
-        event.preventDefault();
-        var versionId = artifactForm.querySelector('[name="version_id"]').value;
-        var formData = new FormData();
-        ["file", "min_os", "max_supported_os", "max_tested_os", "install_notes"].forEach(function (name) {
-          var input = artifactForm.querySelector('[name="' + name + '"]');
-          if (input && input.type === "file") {
-            if (input.files && input.files[0]) { formData.append(name, input.files[0]); }
-          } else if (input) {
-            formData.append(name, input.value || "");
-          }
-        });
-        ["arch_i386", "arch_x86_64", "supports_32bit", "supports_64bit", "hard_block_above_max"].forEach(function (name) {
-          var input = artifactForm.querySelector('[name="' + name + '"]');
-          formData.append(name, input && input.checked ? "true" : "false");
-        });
-        var progress = document.getElementById("uploadProgress");
-        progress.hidden = false;
-        progress.querySelector("span").style.width = "35%";
-        api("/admin/versions/" + encodeURIComponent(versionId) + "/upload", { method: "POST", body: formData }).then(function (payload) {
-          progress.querySelector("span").style.width = "100%";
-          showMessage("artifactUploadNotice", "Uploaded to quarantine. SHA-256: " + payload.upload.sha256 + ". Artifact ID: " + payload.artifact.id, false);
-        }).catch(function (error) {
-          progress.hidden = true;
-          showMessage("artifactUploadNotice", humanError(error), true);
-        });
-      });
-    }
+    });
   }
 
   function renderManagement(route) {
@@ -1252,7 +1658,7 @@
   window.addEventListener("hashchange", render);
 
   Promise.all([
-    api("/categories").then(function (payload) { state.categories = payload.categories || []; }),
+    api("/categories").then(function (payload) { state.categories = normalizeAppleCategories(payload.categories || []); }),
     loadCurrentUser()
   ]).then(function () {
     renderSidebar();

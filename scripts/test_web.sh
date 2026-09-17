@@ -64,21 +64,21 @@ frontend_bundle() {
   N=FrontendBundle
   static_get '/app.js'
   [ "$STATUS" = 200 ] || { fail "$N" HttpStatus 200 "$STATUS"; return; }
-  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
+  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
     grep -Fq "$marker" "$BODY" || { fail "$N" MissingIntegration "$marker" 'not found'; return; }
   done
   if grep -Fq 'document.cookie' "$BODY"; then
     fail "$N" SessionSecurity 'server-owned HttpOnly session cookie' 'document.cookie found'; return
   fi
-  if grep -Fq '"10.9.5"' "$BODY" || grep -Fq '"10.6.8"' "$BODY" || grep -Fq '"10.5.8"' "$BODY" || grep -Fq '"10.4.11"' "$BODY"; then
-    fail "$N" CatalogOSSeries 'major.minor-only web catalog filters' 'patch-level filter value found'; return
+  if grep -Fq 'os: "10.9.5"' "$BODY" || grep -Fq '"10.9.5", "10.8"' "$BODY" || grep -Fq '"10.6.8", "10.5.8"' "$BODY" || grep -Fq '"10.5.8", "10.4.11"' "$BODY"; then
+    fail "$N" CatalogOSSeries 'major.minor-only web catalog filters' 'patch-level value found in catalog filter definitions'; return
   fi
   if grep -Fq 'function renderDownloads' "$BODY" || grep -Fq 'function renderUpdates' "$BODY"; then
     fail "$N" WebOnlyNavigation 'browser-managed downloads and no update manager' 'legacy-client-only web view found'; return
   fi
   static_get '/ui-fixes.css'
-  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY"; then
-    fail "$N" IconStyles 'stable app and toolbar icon styles' "$STATUS $(head -c 300 "$BODY")"; return
+  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY" || ! grep -Fq '.upload-bento' "$BODY" || ! grep -Fq '.bubble-toast' "$BODY" || ! grep -Fq '.field-totp' "$BODY"; then
+    fail "$N" IconStyles 'stable icons plus bento/upload/toast styles' "$STATUS $(head -c 300 "$BODY")"; return
   fi
   ok "$N"
 }

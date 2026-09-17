@@ -29,21 +29,32 @@ JOIN roles r ON r.name = 'admin'
 WHERE u.email = 'admin@legacystore.local';
 
 INSERT INTO categories (slug, name, sort_order) VALUES
-    ('audio-video', 'Audio & Video', 10),
+    ('books', 'Books', 10),
     ('business', 'Business', 20),
     ('developer-tools', 'Developer Tools', 30),
     ('education', 'Education', 40),
     ('entertainment', 'Entertainment', 50),
-    ('games', 'Games', 60),
-    ('graphics-design', 'Graphics & Design', 70),
-    ('internet-network', 'Internet & Network', 80),
-    ('lifestyle', 'Lifestyle', 90),
-    ('music', 'Music', 100),
-    ('photography', 'Photography', 110),
-    ('productivity', 'Productivity', 120),
-    ('reference', 'Reference', 130),
-    ('social-networking', 'Social Networking', 140),
-    ('utilities', 'Utilities', 150);
+    ('finance', 'Finance', 60),
+    ('food-drink', 'Food & Drink', 70),
+    ('games', 'Games', 80),
+    ('graphics-design', 'Graphics & Design', 90),
+    ('health-fitness', 'Health & Fitness', 100),
+    ('lifestyle', 'Lifestyle', 110),
+    ('magazines-newspapers', 'Magazines & Newspapers', 120),
+    ('medical', 'Medical', 130),
+    ('music', 'Music', 140),
+    ('navigation', 'Navigation', 150),
+    ('news', 'News', 160),
+    ('photo-video', 'Photo & Video', 170),
+    ('productivity', 'Productivity', 180),
+    ('reference', 'Reference', 190),
+    ('safari-extensions', 'Safari Extensions', 200),
+    ('shopping', 'Shopping', 210),
+    ('social-networking', 'Social Networking', 220),
+    ('sports', 'Sports', 230),
+    ('travel', 'Travel', 240),
+    ('utilities', 'Utilities', 250),
+    ('weather', 'Weather', 260);
 
 CREATE TEMP TABLE seed_apps (
     slug text PRIMARY KEY,
@@ -60,13 +71,13 @@ CREATE TEMP TABLE seed_apps (
 
 INSERT INTO seed_apps VALUES
     ('pixelmator', 'Pixelmator', 'com.pixelmatorteam.pixelmator', 'Pixelmator Team', 'Image editing for classic Intel Macs.', 'A graphics editor with multiple historical versions for older Intel Macs.', 'graphics-design', 'https://example.invalid/pixelmator', 'commercial', '/icons/pixelmator.png'),
-    ('vlc', 'VLC', 'org.videolan.vlc', 'VideoLAN', 'Media player for many legacy macOS releases.', 'Open media player with broad codec support and older Mac builds.', 'audio-video', 'https://www.videolan.org/vlc/', 'gpl', '/icons/vlc.png'),
-    ('cyberduck', 'Cyberduck', 'ch.sudo.cyberduck', 'iterate GmbH', 'File transfer client for FTP, SFTP and WebDAV.', 'Network file transfer client for classic Mac workflows.', 'internet-network', 'https://cyberduck.io/', 'gpl', '/icons/cyberduck.png'),
-    ('firefox-legacy', 'Firefox Legacy', 'org.mozilla.firefox', 'Mozilla', 'Legacy browser builds for old macOS systems.', 'Extended support browser builds for older Intel-compatible releases.', 'internet-network', 'https://www.mozilla.org/firefox/', 'mpl', '/icons/firefox-legacy.png'),
+    ('vlc', 'VLC', 'org.videolan.vlc', 'VideoLAN', 'Media player for many legacy macOS releases.', 'Open media player with broad codec support and older Mac builds.', 'photo-video', 'https://www.videolan.org/vlc/', 'gpl', '/icons/vlc.png'),
+    ('cyberduck', 'Cyberduck', 'ch.sudo.cyberduck', 'iterate GmbH', 'File transfer client for FTP, SFTP and WebDAV.', 'Network file transfer client for classic Mac workflows.', 'utilities', 'https://cyberduck.io/', 'gpl', '/icons/cyberduck.png'),
+    ('firefox-legacy', 'Firefox Legacy', 'org.mozilla.firefox', 'Mozilla', 'Legacy browser builds for old macOS systems.', 'Extended support browser builds for older Intel-compatible releases.', 'utilities', 'https://www.mozilla.org/firefox/', 'mpl', '/icons/firefox-legacy.png'),
     ('adium', 'Adium', 'com.adiumX.adiumX', 'Adium Team', 'Classic multi-protocol chat client.', 'Messaging client for social networking and chat accounts.', 'social-networking', 'https://adium.im/', 'gpl', '/icons/adium.png'),
-    ('transmission', 'Transmission', 'org.m0k.transmission', 'Transmission Project', 'Lightweight BitTorrent client.', 'Download client metadata for older macOS releases. Real P2P transfer is outside this LegacyStore build.', 'internet-network', 'https://transmissionbt.com/', 'gpl', '/icons/transmission.png'),
+    ('transmission', 'Transmission', 'org.m0k.transmission', 'Transmission Project', 'Lightweight BitTorrent client.', 'Download client metadata for older macOS releases. Real P2P transfer is outside this LegacyStore build.', 'utilities', 'https://transmissionbt.com/', 'gpl', '/icons/transmission.png'),
     ('libreoffice', 'LibreOffice', 'org.libreoffice.script', 'The Document Foundation', 'Office suite for documents and spreadsheets.', 'Productivity suite with modern and older compatible versions.', 'productivity', 'https://www.libreoffice.org/', 'mpl', '/icons/libreoffice.png'),
-    ('handbrake', 'HandBrake', 'fr.handbrake.HandBrake', 'HandBrake Team', 'Video transcoder for older Intel Macs.', 'Audio and video conversion utility for legacy systems.', 'audio-video', 'https://handbrake.fr/', 'gpl', '/icons/handbrake.png'),
+    ('handbrake', 'HandBrake', 'fr.handbrake.HandBrake', 'HandBrake Team', 'Video transcoder for older Intel Macs.', 'Audio and video conversion utility for legacy systems.', 'photo-video', 'https://handbrake.fr/', 'gpl', '/icons/handbrake.png'),
     ('gimp', 'GIMP', 'org.gimp.gimp-2.10', 'GIMP Team', 'Image manipulation program.', 'Graphics application for editing, retouching and image conversion.', 'graphics-design', 'https://www.gimp.org/', 'gpl', '/icons/gimp.png'),
     ('appcleaner', 'AppCleaner', 'net.freemacsoft.AppCleaner', 'FreeMacSoft', 'Utility for removing application support files.', 'Utilities app with a broad compatibility range.', 'utilities', 'https://freemacsoft.net/appcleaner/', 'freeware', '/icons/appcleaner.png'),
     ('legacy-32bit-test', 'Classic 32-bit Utility', 'org.legacystore.legacy32', 'LegacyStore', 'A 32-bit-only utility for older Intel Macs.', 'Small legacy utility that is intentionally unavailable on macOS Catalina.', 'developer-tools', 'https://example.invalid/legacy-32bit-utility', 'freeware', '/icons/legacy-32bit-test.png');

@@ -511,3 +511,606 @@
     justify-self: stretch;
   }
 }
+
+
+/* Bento forms: compact fields should fit their values instead of stretching edge-to-edge. */
+.bento-card {
+  min-width: 0;
+  border: 1px solid #c7cbd0;
+  border-radius: 9px;
+  background: linear-gradient(#fff, #fafafa);
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .07);
+}
+
+.bento-card h2 {
+  margin: 0 0 7px;
+  color: #414b57;
+  font-size: 16px;
+}
+
+.card-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.card-kicker,
+.view-subtitle {
+  margin: 2px 0 0;
+  color: #6c7681;
+  font-size: 12px;
+}
+
+.view-subtitle {
+  margin-top: 4px;
+}
+
+.compact-field-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 14px;
+}
+
+.compact-field-grid .form-row,
+.second-factor-inline .form-row {
+  min-width: 0;
+  margin: 0;
+}
+
+.form-row small,
+.switch-card small,
+.capability-grid small {
+  display: block;
+  margin-top: 4px;
+  color: #87909a;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.required-dot {
+  color: #bd3b2d;
+}
+
+.field-totp {
+  flex: 0 0 108px;
+  max-width: 108px;
+}
+
+.field-totp input {
+  width: 100%;
+  text-align: center;
+  letter-spacing: .14em;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+}
+
+.field-version {
+  flex: 0 0 132px;
+  max-width: 132px;
+}
+
+.field-os {
+  flex: 0 0 150px;
+  max-width: 150px;
+}
+
+.field-date {
+  flex: 0 0 176px;
+  max-width: 176px;
+}
+
+.field-recovery {
+  flex: 0 1 250px;
+  max-width: 250px;
+}
+
+.field-medium {
+  flex: 1 1 210px;
+  max-width: 330px;
+}
+
+.field-wide {
+  flex: 1 1 310px;
+  max-width: 540px;
+}
+
+.field-large {
+  flex: 1 1 360px;
+  max-width: 720px;
+}
+
+.field-full {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
+}
+
+.second-factor-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.second-factor-inline .or {
+  align-self: center;
+  padding-top: 17px;
+  color: #89919a;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.profile-bento,
+.security-bento,
+.upload-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-identity-card {
+  grid-column: span 4;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-edit-card {
+  grid-column: span 8;
+}
+
+.profile-status-card {
+  grid-column: span 4;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 74px;
+  width: 74px;
+  height: 74px;
+  overflow: hidden;
+  border: 1px solid #b4bbc4;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #8bb9ed, #3979c8);
+  box-shadow: inset 0 1px rgba(255,255,255,.55);
+}
+
+.profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-fallback {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  text-shadow: 0 -1px rgba(0,0,0,.25);
+}
+
+.profile-identity-copy {
+  min-width: 0;
+}
+
+.profile-identity-copy h2 {
+  margin-bottom: 3px;
+  color: #1b232c;
+  font-size: 20px;
+}
+
+.profile-identity-copy p {
+  margin: 0 0 8px;
+  color: #6b7580;
+  overflow-wrap: anywhere;
+}
+
+.profile-role-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.account-metric-grid {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.account-metric {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 9px;
+  border: 1px solid #d9dde1;
+  border-radius: 6px;
+  background: #f7f8f9;
+}
+
+.account-metric span {
+  color: #6d7680;
+  font-size: 11px;
+}
+
+.security-2fa-card {
+  grid-column: 1 / -1;
+}
+
+.security-password-card,
+.security-email-card {
+  grid-column: span 6;
+}
+
+.security-sessions-card {
+  grid-column: 1 / -1;
+}
+
+.security-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.security-mini-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d7dbe0;
+  border-radius: 7px;
+  background: #fafbfc;
+}
+
+.security-mini-card h3 {
+  margin: 0 0 10px;
+  color: #505a66;
+  font-size: 13px;
+}
+
+.security-mini-card.danger-zone {
+  border-color: #dfb3ad;
+  background: #fff8f7;
+}
+
+.secret-url {
+  margin-top: 6px;
+  color: #737d88;
+  font-size: 10px;
+}
+
+.upload-page-title {
+  margin-bottom: 12px;
+}
+
+.upload-package-card {
+  grid-column: 1 / -1;
+}
+
+.upload-app-card {
+  grid-column: span 8;
+}
+
+.upload-release-card {
+  grid-column: span 4;
+}
+
+.upload-compat-card {
+  grid-column: span 8;
+}
+
+.upload-submit-card {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.upload-app-fields select,
+.compact-field-grid select {
+  min-height: 29px;
+  border: 1px solid #a5adb6;
+  border-radius: 5px;
+  padding: 4px 24px 4px 8px;
+  background: linear-gradient(#fff, #f2f3f4);
+}
+
+.artifact-dropzone {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 150px;
+  margin-top: 12px;
+  padding: 18px;
+  border: 1px dashed #9ea9b5;
+  border-radius: 9px;
+  background: linear-gradient(#fbfdff, #f0f5fa);
+  color: #4d5966;
+  text-align: center;
+  box-shadow: inset 0 1px rgba(255,255,255,.9);
+}
+
+.artifact-dropzone:hover,
+.artifact-dropzone:focus {
+  border-color: #4e8bd8;
+  background: linear-gradient(#fff, #eaf4ff);
+  outline: none;
+}
+
+.artifact-dropzone svg {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 7px;
+  fill: none;
+  stroke: #4a82c9;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.artifact-dropzone strong {
+  font-size: 15px;
+}
+
+.artifact-dropzone > span {
+  margin-top: 3px;
+  color: #66809c;
+  font-size: 12px;
+}
+
+.artifact-dropzone > small {
+  max-width: 620px;
+  margin-top: 8px;
+  color: #8a939d;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.detected-package {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 11px;
+  padding: 9px 10px;
+  border: 1px solid #d7dce1;
+  border-radius: 7px;
+  background: #f9fafb;
+}
+
+.detected-package p {
+  margin: 3px 0 0;
+  color: #707b86;
+  font-size: 11px;
+}
+
+.detected-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.14);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #84b8ef, #3b78c5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.detected-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+.switch-card,
+.capability-grid > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid #d6dbe0;
+  border-radius: 7px;
+  background: #f8f9fa;
+}
+
+.switch-card {
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+
+.switch-card input,
+.capability-grid input {
+  margin-top: 2px;
+}
+
+.switch-card span,
+.capability-grid span {
+  min-width: 0;
+}
+
+.capability-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.capability-grid > label {
+  flex: 1 1 145px;
+  max-width: 220px;
+}
+
+.upload-submit-card p {
+  margin: 0;
+  color: #6c7580;
+  font-size: 12px;
+}
+
+.upload-submit-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.upload-primary-button {
+  width: 100%;
+  min-height: 30px;
+}
+
+.upload-drop-overlay[hidden] {
+  display: none;
+}
+
+.upload-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: rgba(32, 45, 61, .43);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.upload-drop-overlay-card {
+  display: grid;
+  place-items: center;
+  min-width: min(520px, 80vw);
+  padding: 34px 44px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, .94);
+  box-shadow: 0 16px 46px rgba(0,0,0,.25);
+  color: #263440;
+  text-align: center;
+}
+
+.upload-drop-overlay-card svg {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 11px;
+  fill: none;
+  stroke: #277bd5;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.upload-drop-overlay-card strong {
+  font-size: 20px;
+}
+
+.upload-drop-overlay-card span {
+  margin-top: 6px;
+  color: #65717d;
+  font-size: 12px;
+}
+
+.toast-host {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 4000;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 36px));
+  pointer-events: none;
+}
+
+.bubble-toast {
+  padding: 11px 13px;
+  border: 1px solid rgba(111, 28, 19, .48);
+  border-radius: 8px;
+  background: rgba(185, 55, 43, .96);
+  color: #fff;
+  box-shadow: 0 7px 22px rgba(0,0,0,.22);
+  font-size: 12px;
+  line-height: 1.35;
+  animation: bubble-toast-life 5s linear forwards;
+}
+
+.bubble-toast.success {
+  border-color: rgba(28, 91, 35, .5);
+  background: rgba(55, 132, 62, .96);
+}
+
+@keyframes bubble-toast-life {
+  0% {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+  7% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+
+@media (max-width: 1180px) {
+  .upload-app-card,
+  .upload-release-card,
+  .upload-compat-card,
+  .upload-submit-card,
+  .profile-identity-card,
+  .profile-edit-card,
+  .profile-status-card,
+  .security-password-card,
+  .security-email-card {
+    grid-column: 1 / -1;
+  }
+
+  .security-mini-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .profile-bento,
+  .security-bento,
+  .upload-bento {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-field-grid,
+  .second-factor-inline,
+  .capability-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .field-totp,
+  .field-version,
+  .field-os,
+  .field-date,
+  .field-recovery,
+  .field-medium,
+  .field-wide,
+  .field-large,
+  .field-full,
+  .switch-card,
+  .capability-grid > label {
+    width: 100%;
+    max-width: none;
+  }
+
+  .field-totp input {
+    max-width: 108px;
+  }
+
+  .second-factor-inline .or {
+    display: none;
+  }
+}
