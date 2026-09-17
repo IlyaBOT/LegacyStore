@@ -65,7 +65,7 @@ jobs:
       DATABASE_URL: postgres://legacystore:legacystore_test_password@127.0.0.1:5432/legacystore_test?sslmode=disable
       BACKEND_HOST: 127.0.0.1
       BACKEND_PORT: 8080
-      PUBLIC_BASE_URL: http://127.0.0.1:8080
+      PUBLIC_BASE_URL: http://localhost:8080
       TRUST_PROXY_HEADERS: 'true'
       CATALOG_SIGNING_ENABLED: 'false'
     steps:
@@ -119,7 +119,7 @@ jobs:
 
       - name: Run API integration tests
         env:
-          BASE_URL: http://127.0.0.1:8080
+          BASE_URL: http://localhost:8080
         run: ./scripts/test_api.sh
 
       - name: Show backend log on failure
