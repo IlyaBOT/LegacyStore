@@ -49,3 +49,42 @@ func TestEvaluateUntestedNewerOS(t *testing.T) {
 		t.Fatalf("expected untested, got %#v", result)
 	}
 }
+
+
+func TestEvaluateOSSeriesAllowsPatchLevelMinimumWithinSameRelease(t *testing.T) {
+	result := Evaluate(Target{OSVersion: "10.6", Arch: "x86_64", OSSeries: true}, Artifact{
+		MinOS:         "10.6.8",
+		ArchX8664:     true,
+		Supports32Bit: true,
+		Supports64Bit: true,
+	})
+	if result.Status == "blocked" {
+		t.Fatalf("10.6 catalog series must include artifacts requiring a later 10.6.x patch, got %#v", result)
+	}
+}
+
+func TestEvaluateOSSeriesAllowsPatchLevelMaximumWithinSameRelease(t *testing.T) {
+	result := Evaluate(Target{OSVersion: "10.6", Arch: "x86_64", OSSeries: true}, Artifact{
+		MinOS:             "10.5",
+		MaxSupportedOS:    "10.6.2",
+		HardBlockAboveMax: true,
+		ArchX8664:         true,
+		Supports32Bit:     true,
+		Supports64Bit:     true,
+	})
+	if result.Status == "blocked" {
+		t.Fatalf("10.6 catalog series must include artifacts supporting only part of 10.6.x, got %#v", result)
+	}
+}
+
+func TestEvaluateOSSeriesStillBlocksDifferentRelease(t *testing.T) {
+	result := Evaluate(Target{OSVersion: "10.6", Arch: "x86_64", OSSeries: true}, Artifact{
+		MinOS:         "10.7",
+		ArchX8664:     true,
+		Supports32Bit: true,
+		Supports64Bit: true,
+	})
+	if result.Status != "blocked" || len(result.Reasons) == 0 || result.Reasons[0].Code != "os_too_old" {
+		t.Fatalf("10.6 catalog series must not include 10.7-only artifacts, got %#v", result)
+	}
+}
