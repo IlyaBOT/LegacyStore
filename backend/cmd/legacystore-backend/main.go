@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"legacystore/backend/internal/account"
 	"legacystore/backend/internal/api"
 	"legacystore/backend/internal/catalog"
+	"legacystore/backend/internal/catalogsign"
 	"legacystore/backend/internal/config"
 	"legacystore/backend/internal/db"
 )
@@ -27,7 +29,34 @@ func main() {
 	}
 	defer conn.Close()
 
-	handler := api.NewRouter(cfg, catalog.NewStore(conn), account.NewStore(conn))
+	accountStore := account.NewStore(conn)
+	if strings.TrimSpace(cfg.AdminEmail) != "" || strings.TrimSpace(cfg.AdminPassword) != "" {
+		if strings.TrimSpace(cfg.AdminEmail) == "" || strings.TrimSpace(cfg.AdminPassword) == "" {
+			log.Fatal("admin provisioning requires both ADMIN_EMAIL and ADMIN_PASSWORD")
+		}
+		if err := accountStore.EnsureAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword, cfg.AdminNickname); err != nil {
+			log.Fatalf("admin provisioning failed: %v", err)
+		}
+		log.Printf("production administrator ensured for %s", cfg.AdminEmail)
+	}
+	hasAdmin, err := accountStore.HasAdmin(ctx)
+	if err != nil {
+		log.Fatalf("admin state check failed: %v", err)
+	}
+	if !hasAdmin {
+		log.Fatal("no administrator is provisioned; set ADMIN_EMAIL and ADMIN_PASSWORD before starting the backend")
+	}
+
+	var signer *catalogsign.Signer
+	if cfg.CatalogSigningEnabled {
+		signer, err = catalogsign.Load(cfg.CatalogPrivateKeyPath, cfg.CatalogPublicKeyPath)
+		if err != nil {
+			log.Fatalf("catalog signing configuration failed: %v", err)
+		}
+		log.Printf("catalog signing enabled with key %s", signer.KeyID())
+	}
+
+	handler := api.NewRouterWithSigner(cfg, catalog.NewStore(conn), accountStore, signer)
 	server := &http.Server{
 		Addr:              cfg.Addr(),
 		Handler:           api.SecurityMiddleware(handler),
