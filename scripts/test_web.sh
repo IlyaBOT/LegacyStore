@@ -64,7 +64,7 @@ frontend_bundle() {
   N=FrontendBundle
   static_get '/app.js'
   [ "$STATUS" = 200 ] || { fail "$N" HttpStatus 200 "$STATUS"; return; }
-  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
+  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
     grep -Fq "$marker" "$BODY" || { fail "$N" MissingIntegration "$marker" 'not found'; return; }
   done
   if grep -Fq 'document.cookie' "$BODY"; then
@@ -77,8 +77,8 @@ frontend_bundle() {
     fail "$N" WebOnlyNavigation 'browser-managed downloads and no update manager' 'legacy-client-only web view found'; return
   fi
   static_get '/ui-fixes.css'
-  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY"; then
-    fail "$N" IconStyles 'stable app and toolbar icon styles' "$STATUS $(head -c 300 "$BODY")"; return
+  if [ "$STATUS" != 200 ] || ! grep -Fq '.app-icon-image' "$BODY" || ! grep -Fq '.tab-icon' "$BODY" || ! grep -Fq '.upload-bento' "$BODY" || ! grep -Fq '.bubble-toast' "$BODY" || ! grep -Fq '.field-totp' "$BODY"; then
+    fail "$N" IconStyles 'stable icons plus bento/upload/toast styles' "$STATUS $(head -c 300 "$BODY")"; return
   fi
   ok "$N"
 }
