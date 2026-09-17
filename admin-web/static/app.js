@@ -827,7 +827,10 @@
       csrf_origin_rejected: "The request origin was rejected.",
       forbidden: "Your account does not have permission for this action.",
       unauthorized: "Please sign in again.",
-      rate_limited: "Too many attempts. Try again later."
+      rate_limited: "Too many attempts. Try again later.",
+      metadata_too_large: "Metadata file is too large.",
+      plist_required: "Info.plist was not found in the dropped app bundle.",
+      download_source_unavailable: "No download source is available."
     };
     return messages[code] || code.replace(/_/g, " ");
   }
@@ -838,6 +841,39 @@
     node.textContent = message;
     node.classList.toggle("is-error", !!isError);
     node.classList.toggle("is-success", !isError && !!message);
+  }
+
+  function toastHost() {
+    var host = document.getElementById("toastHost");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "toastHost";
+      host.className = "toast-host";
+      host.setAttribute("aria-live", "polite");
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+
+  function showToast(message, type) {
+    if (!message) { return; }
+    var toast = document.createElement("div");
+    toast.className = "bubble-toast " + (type || "error");
+    toast.textContent = message;
+    toastHost().appendChild(toast);
+    window.setTimeout(function () {
+      if (toast.parentNode) { toast.parentNode.removeChild(toast); }
+    }, 5000);
+  }
+
+  function showInspectionWarnings(warnings) {
+    warnings = warnings || [];
+    warnings.slice(0, 3).forEach(function (warning) {
+      showToast(warning.message || warning.code || "Unknown metadata warning", "error");
+    });
+    if (warnings.length > 3) {
+      showToast("Ещё " + (warnings.length - 3) + " предупреждений по метаданным.", "error");
+    }
   }
 
   function submitAuth(path, data) {
