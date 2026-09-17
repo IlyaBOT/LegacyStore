@@ -3,6 +3,9 @@ package compatibility
 type Target struct {
 	OSVersion string
 	Arch      string
+	// OSSeries treats OSVersion as a major.minor catalog family (for example 10.6.x).
+	// Native clients should leave this false and send the exact host OS version.
+	OSSeries bool
 }
 
 type Artifact struct {
@@ -49,7 +52,7 @@ func Evaluate(target Target, artifact Artifact) Result {
 		minOS, err := ParseVersion(artifact.MinOS)
 		if err != nil {
 			reasons = append(reasons, reason("unknown_compatibility", "Минимальная версия системы указана в неизвестном формате."))
-		} else if osVersion.Compare(minOS) < 0 {
+		} else if compareTargetOS(osVersion, minOS, target.OSSeries) < 0 {
 			reasons = append(reasons, reason("os_too_old", "Версия системы "+target.OSVersion+" ниже минимальной требуемой продуктом "+artifact.MinOS+"."))
 		}
 	}
@@ -58,7 +61,7 @@ func Evaluate(target Target, artifact Artifact) Result {
 		maxOS, err := ParseVersion(artifact.MaxSupportedOS)
 		if err != nil {
 			reasons = append(reasons, reason("unknown_compatibility", "Максимальная версия системы указана в неизвестном формате."))
-		} else if osVersion.Compare(maxOS) > 0 && artifact.HardBlockAboveMax {
+		} else if compareTargetOS(osVersion, maxOS, target.OSSeries) > 0 && artifact.HardBlockAboveMax {
 			reasons = append(reasons, reason("os_too_new", "Версия системы "+target.OSVersion+" выше максимальной поддерживаемой продуктом "+artifact.MaxSupportedOS+"."))
 		}
 	}
@@ -102,7 +105,7 @@ func Evaluate(target Target, artifact Artifact) Result {
 
 	if artifact.MaxTestedOS != "" {
 		maxTested, err := ParseVersion(artifact.MaxTestedOS)
-		if err == nil && osVersion.Compare(maxTested) > 0 {
+		if err == nil && compareTargetOS(osVersion, maxTested, target.OSSeries) > 0 {
 			reasons = append(reasons, reason("untested_newer_os", "Версия системы "+target.OSVersion+" новее максимальной протестированной версии "+artifact.MaxTestedOS+"."))
 			return Result{
 				Status:  "untested",
@@ -123,6 +126,16 @@ func Evaluate(target Target, artifact Artifact) Result {
 	}
 
 	return Result{Status: "compatible", Level: "recommended", Label: "Совместимо"}
+}
+
+func compareTargetOS(target, boundary Version, series bool) int {
+	if !series {
+		return target.Compare(boundary)
+	}
+	if target.Major != boundary.Major {
+		return compareInt(target.Major, boundary.Major)
+	}
+	return compareInt(target.Minor, boundary.Minor)
 }
 
 func blocked(r Reason) Result {
