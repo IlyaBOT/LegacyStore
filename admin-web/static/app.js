@@ -423,8 +423,9 @@
   function appCarouselSlideHTML(slide) {
     var app = (slide && slide.app) || {};
     var image = app.hero_image || app.icon || "";
+    var imageClass = app.hero_image ? " hero-shot" : " app-icon-art";
     return '<article class="home-carousel-slide is-app" data-carousel-slide>' +
-      (image ? '<img class="home-carousel-art app-art" data-home-carousel-img src="' + escapeHTML(image) + '" alt="">' : "") +
+      (image ? '<img class="home-carousel-art' + imageClass + '" data-home-carousel-img src="' + escapeHTML(image) + '" alt="">' : "") +
       '<div class="home-carousel-shade"></div><div class="home-carousel-content"><span class="carousel-eyebrow">' +
       escapeHTML(slide.metric || "Featured") + '</span><h1>' + escapeHTML(app.name || "Application") + '</h1><p>' +
       escapeHTML(app.summary || "") + '</p><button class="blue-button" data-route="app/' + escapeHTML(app.slug || "") +
