@@ -27,17 +27,30 @@ services:
       BACKEND_PORT: 8080
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
       DATABASE_URL: ${DATABASE_URL:-postgres://legacystore:legacystore_dev_password@postgres:5432/legacystore?sslmode=disable}
-      CATALOG_SIGNING_ENABLED: ${CATALOG_SIGNING_ENABLED:-false}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NICKNAME: ${ADMIN_NICKNAME:-Administrator}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/data/storage}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-8589934592}
+      CATALOG_SIGNING_ENABLED: ${CATALOG_SIGNING_ENABLED:-false}
+      CATALOG_PUBLIC_KEY_PATH: ${CATALOG_PUBLIC_KEY_PATH:-}
+      CATALOG_PRIVATE_KEY_PATH: ${CATALOG_PRIVATE_KEY_PATH:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      RECOVERY_BASE_URL: ${RECOVERY_BASE_URL:-}
+      RECOVERY_DEBUG_RETURN_TOKEN: ${RECOVERY_DEBUG_RETURN_TOKEN:-false}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - ./backend:/app
       - ./build:/workspace/build
       - storage_data:/data/storage
+      - ./secrets:/run/secrets/legacystore:ro
     depends_on:
       postgres:
         condition: service_healthy
