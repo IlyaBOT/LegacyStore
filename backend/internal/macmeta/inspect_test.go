@@ -152,3 +152,32 @@ func TestNestedExtractionCandidatesIncludePayloadAndHFS(t *testing.T) {
 		}
 	}
 }
+
+func TestQBittorrentBundleMetadataShape(t *testing.T) {
+	plist := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+	<plist version="1.0"><dict>
+	<key>CFBundleDisplayName</key><string>qBittorrent</string>
+	<key>CFBundleName</key><string>qBittorrent</string>
+	<key>CFBundleIconFile</key><string>qbittorrent_mac.icns</string>
+	<key>CFBundleShortVersionString</key><string>4.6.7</string>
+	<key>CFBundleIdentifier</key><string>org.qbittorrent.qBittorrent</string>
+	<key>LSMinimumSystemVersion</key><string>10.14.0</string>
+	</dict></plist>`)
+
+	result := InspectAppBundleParts(plist, nil, "")
+	if result.Metadata.Name != "qBittorrent" {
+		t.Fatalf("name = %q", result.Metadata.Name)
+	}
+	if result.Metadata.BundleID != "org.qbittorrent.qBittorrent" {
+		t.Fatalf("bundle = %q", result.Metadata.BundleID)
+	}
+	if result.Metadata.Version != "4.6.7" {
+		t.Fatalf("version = %q", result.Metadata.Version)
+	}
+	if result.Metadata.MinimumOS != "10.14.0" {
+		t.Fatalf("minimum OS = %q", result.Metadata.MinimumOS)
+	}
+	if result.Metadata.CategorySlug != "" {
+		t.Fatalf("unexpected category = %q", result.Metadata.CategorySlug)
+	}
+}
