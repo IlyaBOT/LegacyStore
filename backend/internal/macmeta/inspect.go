@@ -36,41 +36,41 @@ type Metadata struct {
 }
 
 type Result struct {
-	FileName    string   `json:"file_name"`
-	PackageType string   `json:"package_type"`
-	Metadata    Metadata `json:"metadata"`
+	FileName    string    `json:"file_name"`
+	PackageType string    `json:"package_type"`
+	Metadata    Metadata  `json:"metadata"`
 	Warnings    []Warning `json:"warnings,omitempty"`
 }
 
 var categoryMap = map[string]string{
-	"public.app-category.books":              "books",
-	"public.app-category.business":           "business",
-	"public.app-category.developer-tools":    "developer-tools",
-	"public.app-category.education":          "education",
-	"public.app-category.entertainment":      "entertainment",
-	"public.app-category.finance":            "finance",
-	"public.app-category.food-drink":         "food-drink",
-	"public.app-category.games":              "games",
-	"public.app-category.graphics-design":    "graphics-design",
-	"public.app-category.healthcare-fitness": "health-fitness",
-	"public.app-category.lifestyle":          "lifestyle",
+	"public.app-category.books":                "books",
+	"public.app-category.business":             "business",
+	"public.app-category.developer-tools":      "developer-tools",
+	"public.app-category.education":            "education",
+	"public.app-category.entertainment":        "entertainment",
+	"public.app-category.finance":              "finance",
+	"public.app-category.food-drink":           "food-drink",
+	"public.app-category.games":                "games",
+	"public.app-category.graphics-design":      "graphics-design",
+	"public.app-category.healthcare-fitness":   "health-fitness",
+	"public.app-category.lifestyle":            "lifestyle",
 	"public.app-category.magazines-newspapers": "magazines-newspapers",
-	"public.app-category.medical":            "medical",
-	"public.app-category.music":              "music",
-	"public.app-category.navigation":         "navigation",
-	"public.app-category.news":               "news",
-	"public.app-category.photography":        "photo-video",
-	"public.app-category.photo-video":        "photo-video",
-	"public.app-category.productivity":       "productivity",
-	"public.app-category.reference":          "reference",
-	"public.app-category.safari-extensions":  "safari-extensions",
-	"public.app-category.shopping":           "shopping",
-	"public.app-category.social-networking":  "social-networking",
-	"public.app-category.sports":             "sports",
-	"public.app-category.travel":             "travel",
-	"public.app-category.utilities":          "utilities",
-	"public.app-category.video":              "photo-video",
-	"public.app-category.weather":            "weather",
+	"public.app-category.medical":              "medical",
+	"public.app-category.music":                "music",
+	"public.app-category.navigation":           "navigation",
+	"public.app-category.news":                 "news",
+	"public.app-category.photography":          "photo-video",
+	"public.app-category.photo-video":          "photo-video",
+	"public.app-category.productivity":         "productivity",
+	"public.app-category.reference":            "reference",
+	"public.app-category.safari-extensions":    "safari-extensions",
+	"public.app-category.shopping":             "shopping",
+	"public.app-category.social-networking":    "social-networking",
+	"public.app-category.sports":               "sports",
+	"public.app-category.travel":               "travel",
+	"public.app-category.utilities":            "utilities",
+	"public.app-category.video":                "photo-video",
+	"public.app-category.weather":              "weather",
 }
 
 func InspectFile(ctx context.Context, path, originalName string) Result {
