@@ -105,6 +105,7 @@ func (s *Store) Login(ctx context.Context, email, password, totpCode string, rem
 		&user.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
+		_ = verifyPassword(dummyPasswordHash, password)
 		return nil, ErrInvalidCredential
 	}
 	if err != nil {
@@ -337,7 +338,7 @@ func (s *Store) RevokeSession(ctx context.Context, userID, sessionID int64) erro
 }
 
 func createSession(ctx context.Context, tx *sql.Tx, userID int64, remember bool, ip net.IP, userAgent string) (string, time.Time, error) {
-	return createScopedSession(ctx, tx, userID, remember, ip, userAgent, "web", nil, 0, "")
+	return createScopedSession(ctx, tx, userID, remember, ip, userAgent, "web", []string{}, 0, "")
 }
 
 func createScopedSession(ctx context.Context, tx *sql.Tx, userID int64, remember bool, ip net.IP, userAgent, authKind string, scopes []string, legacyPasswordID int64, legacyDeviceIdentifier string) (string, time.Time, error) {
@@ -353,6 +354,9 @@ func createScopedSession(ctx context.Context, tx *sql.Tx, userID int64, remember
 	var legacyID any
 	if legacyPasswordID > 0 {
 		legacyID = legacyPasswordID
+	}
+	if scopes == nil {
+		scopes = []string{}
 	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO sessions (
