@@ -1257,7 +1257,7 @@
     setValue("min_os", metadata.minimum_os);
     if (metadata.category_slug) {
       var category = form.querySelector('[name="category_slug"]');
-      if (category && category.querySelector('option[value="' + CSS.escape(metadata.category_slug) + '"]')) {
+      if (category && Array.prototype.some.call(category.options, function (option) { return option.value === metadata.category_slug; })) {
         category.value = metadata.category_slug;
       }
     }
@@ -1272,6 +1272,8 @@
 
   function inspectArtifactFile(file) {
     if (!file) { return; }
+    state.uploadContext.appId = "";
+    state.uploadContext.versionId = "";
     state.uploadContext.file = file;
     state.uploadContext.inspecting = true;
     state.uploadContext.inspection = { file_name: file.name, package_type: file.name.split(".").pop().toLowerCase(), metadata: {} };
@@ -1309,6 +1311,8 @@
   }
 
   function inspectDroppedAppBundle(entry) {
+    state.uploadContext.appId = "";
+    state.uploadContext.versionId = "";
     state.uploadContext.file = null;
     state.uploadContext.inspecting = true;
     state.uploadContext.inspection = { file_name: entry.name, package_type: "app", metadata: {} };
