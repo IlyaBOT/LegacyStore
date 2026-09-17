@@ -165,69 +165,165 @@ func inspectZip(path string, result *Result) error {
 	return nil
 }
 
+type extractionCandidate struct {
+	path  string
+	depth int
+}
+
 func inspectWith7Zip(ctx context.Context, path string, result *Result) error {
 	sevenZip, err := exec.LookPath("7z")
 	if err != nil {
 		return errors.New("7z недоступен на сервере")
 	}
-	tempDir, err := os.MkdirTemp("", "legacystore-inspect-*")
+
+	workDir, err := os.MkdirTemp("", "legacystore-inspect-*")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(workDir)
 
-	commandContext, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	command := exec.CommandContext(commandContext, sevenZip, "x", "-y", "-bd", "-bb0", "-o"+tempDir, path)
-	output, err := command.CombinedOutput()
-	if commandContext.Err() != nil {
-		return errors.New("разбор пакета превысил лимит времени")
-	}
-	if err != nil {
-		message := strings.TrimSpace(string(output))
-		if len(message) > 180 {
-			message = message[:180]
+	queue := []extractionCandidate{{path: path, depth: 0}}
+	visited := make(map[string]bool)
+	processed := 0
+	var lastErr error
+
+	for len(queue) > 0 && processed < 16 {
+		candidate := queue[0]
+		queue = queue[1:]
+		if candidate.depth > 4 {
+			continue
 		}
-		if message == "" {
-			message = err.Error()
+		absolute, absErr := filepath.Abs(candidate.path)
+		if absErr == nil {
+			if visited[absolute] {
+				continue
+			}
+			visited[absolute] = true
 		}
-		return fmt.Errorf("7z: %s", message)
-	}
 
-	if err := inspectExtractedTree(tempDir, result); err == nil {
-		return nil
-	}
+		stageDir := filepath.Join(workDir, fmt.Sprintf("stage-%02d", processed))
+		processed++
+		if mkErr := os.MkdirAll(stageDir, 0750); mkErr != nil {
+			lastErr = mkErr
+			continue
+		}
+		if extractErr := extractWith7Zip(ctx, sevenZip, candidate.path, stageDir); extractErr != nil {
+			lastErr = extractErr
+			if candidate.depth == 0 {
+				return extractErr
+			}
+			continue
+		}
 
-	if result.PackageType == "pkg" {
-		if err := inspectPackageXML(tempDir, result); err == nil {
+		if inspectErr := inspectExtractedTree(stageDir, result); inspectErr == nil {
 			return nil
+		} else {
+			lastErr = inspectErr
 		}
-	}
 
-	var nestedDMG string
-	_ = filepath.WalkDir(tempDir, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil || nestedDMG != "" || entry.IsDir() {
-			return nil
-		}
-		if strings.EqualFold(filepath.Ext(path), ".dmg") {
-			nestedDMG = path
-		}
-		return nil
-	})
-	if nestedDMG != "" {
-		nestedDir, mkErr := os.MkdirTemp("", "legacystore-inspect-nested-*")
-		if mkErr == nil {
-			defer os.RemoveAll(nestedDir)
-			nested := exec.CommandContext(commandContext, sevenZip, "x", "-y", "-bd", "-bb0", "-o"+nestedDir, nestedDMG)
-			if nested.Run() == nil {
-				if inspectExtractedTree(nestedDir, result) == nil {
-					return nil
-				}
+		// Flat PKGs can expose useful metadata before their Payload is unpacked.
+		// Keep those values, but continue recursively because the application
+		// bundle usually lives inside Payload.
+		_ = inspectPackageXML(stageDir, result)
+
+		if candidate.depth < 4 {
+			nested, nestedErr := nestedExtractionCandidates(stageDir, candidate.depth+1)
+			if nestedErr == nil {
+				queue = append(queue, nested...)
 			}
 		}
 	}
 
-	return errors.New("метаданные приложения внутри архива не найдены")
+	if lastErr != nil {
+		return fmt.Errorf("метаданные приложения внутри образа не найдены: %w", lastErr)
+	}
+	return errors.New("метаданные приложения внутри образа не найдены")
+}
+
+func extractWith7Zip(ctx context.Context, sevenZip, source, destination string) error {
+	commandContext, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
+	command := exec.CommandContext(commandContext, sevenZip, "x", "-y", "-bd", "-bb0", "-o"+destination, source)
+	output, err := command.CombinedOutput()
+	if commandContext.Err() != nil {
+		return errors.New("разбор пакета превысил лимит времени")
+	}
+	if err == nil {
+		return nil
+	}
+	message := strings.TrimSpace(string(output))
+	if len(message) > 180 {
+		message = message[:180]
+	}
+	if message == "" {
+		message = err.Error()
+	}
+	return fmt.Errorf("7z: %s", message)
+}
+
+func nestedExtractionCandidates(root string, depth int) ([]extractionCandidate, error) {
+	candidates := make([]extractionCandidate, 0, 4)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if len(candidates) >= 12 {
+			return nil
+		}
+		if isNestedArchiveCandidate(path) {
+			candidates = append(candidates, extractionCandidate{path: path, depth: depth})
+		}
+		return nil
+	})
+	return candidates, err
+}
+
+func isNestedArchiveCandidate(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	ext := strings.ToLower(filepath.Ext(base))
+	switch ext {
+	case ".dmg", ".hfs", ".hfsx", ".img", ".image", ".apfs", ".pkg", ".mpkg", ".xar", ".cpio", ".gz", ".bz2", ".xz", ".lzma":
+		return true
+	}
+	if base == "payload" || strings.HasPrefix(base, "payload~") {
+		return true
+	}
+	return hasDiskOrArchiveSignature(path)
+}
+
+func hasDiskOrArchiveSignature(path string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	buffer := make([]byte, 4096)
+	n, _ := file.Read(buffer)
+	buffer = buffer[:n]
+	if len(buffer) >= 1026 {
+		magic := string(buffer[1024:1026])
+		if magic == "H+" || magic == "HX" {
+			return true
+		}
+	}
+	if len(buffer) >= 520 && string(buffer[512:520]) == "EFI PART" {
+		return true
+	}
+	if len(buffer) >= 36 && string(buffer[32:36]) == "NXSB" {
+		return true
+	}
+	if bytes.HasPrefix(buffer, []byte("xar!")) || bytes.HasPrefix(buffer, []byte("070701")) || bytes.HasPrefix(buffer, []byte("070702")) {
+		return true
+	}
+	if len(buffer) >= 2 && buffer[0] == 0x1f && buffer[1] == 0x8b {
+		return true
+	}
+	return false
 }
 
 func inspectExtractedTree(root string, result *Result) error {
