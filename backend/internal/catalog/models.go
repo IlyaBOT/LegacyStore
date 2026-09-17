@@ -14,11 +14,25 @@ type AppSummary struct {
 	Category           string               `json:"category"`
 	Summary            string               `json:"summary"`
 	Icon               string               `json:"icon,omitempty"`
+	HeroImage          string               `json:"hero_image,omitempty"`
 	Rating             float64              `json:"rating"`
 	RatingCount        int                  `json:"rating_count"`
+	Downloads          int64                `json:"downloads"`
 	RecommendedVersion string               `json:"recommended_version,omitempty"`
 	ArchBadges         []string             `json:"arch_badges"`
 	Compatibility      compatibility.Result `json:"compatibility"`
+}
+
+type HomeSlide struct {
+	Metric string     `json:"metric"`
+	App    AppSummary `json:"app"`
+}
+
+type HomeFeed struct {
+	Popular      []AppSummary `json:"popular"`
+	TopDownloads []AppSummary `json:"top_downloads"`
+	NewReleases  []AppSummary `json:"new_releases"`
+	Slides       []HomeSlide   `json:"slides"`
 }
 
 type AppDetail struct {
@@ -107,6 +121,7 @@ type Filters struct {
 	Limit          int
 	Category       string
 	Query          string
+	Sort           string
 	Target         compatibility.Target
 	CompatibleOnly bool
 }
