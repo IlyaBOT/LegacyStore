@@ -134,11 +134,29 @@ func (s *Store) AddReviewImages(ctx context.Context, user User, reviewRef string
 	}
 	defer tx.Rollback()
 
-	var existing int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM review_images WHERE review_id = $1`, reviewID).Scan(&existing); err != nil {
+	rows, err := tx.QueryContext(ctx, `SELECT sort_order FROM review_images WHERE review_id = $1 ORDER BY sort_order`, reviewID)
+	if err != nil {
 		return nil, err
 	}
-	if existing+len(inputs) > 3 {
+	used := map[int]bool{}
+	for rows.Next() {
+		var position int
+		if err := rows.Scan(&position); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		used[position] = true
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	available := make([]int, 0, 3)
+	for position := 0; position < 3; position++ {
+		if !used[position] {
+			available = append(available, position)
+		}
+	}
+	if len(inputs) > len(available) {
 		return nil, ErrInvalidCredential
 	}
 
@@ -153,7 +171,7 @@ func (s *Store) AddReviewImages(ctx context.Context, user User, reviewRef string
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO review_images (review_id, image_id, sort_order)
 			VALUES ($1, $2, $3)
-		`, reviewID, asset.ID, existing+i); err != nil {
+		`, reviewID, asset.ID, available[i]); err != nil {
 			return nil, err
 		}
 		created = append(created, *asset)
@@ -200,19 +218,6 @@ func (s *Store) DeleteReviewImage(ctx context.Context, user User, reviewRef, ima
 		return err
 	}
 	_, _ = tx.ExecContext(ctx, `DELETE FROM image_assets WHERE id = $1 AND kind = 'review'`, imageID)
-	if _, err := tx.ExecContext(ctx, `
-		WITH ordered AS (
-			SELECT image_id, row_number() OVER (ORDER BY sort_order, image_id) - 1 AS new_order
-			FROM review_images
-			WHERE review_id = $1
-		)
-		UPDATE review_images ri
-		SET sort_order = ordered.new_order
-		FROM ordered
-		WHERE ri.review_id = $1 AND ri.image_id = ordered.image_id
-	`, reviewID); err != nil {
-		return err
-	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
