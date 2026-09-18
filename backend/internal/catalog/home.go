@@ -58,28 +58,6 @@ func (s *Store) Home(ctx context.Context, target compatibility.Target) (*HomeFee
 	return feed, nil
 }
 
-func (s *Store) RecordDownload(ctx context.Context, artifactID int64) error {
-	result, err := s.db.ExecContext(ctx, `
-		INSERT INTO download_events (artifact_id, app_id)
-		SELECT ar.id, v.app_id
-		FROM artifacts ar
-		JOIN app_versions v ON v.id = ar.app_version_id
-		WHERE ar.id = $1
-		  AND ar.moderation_status = 'approved'
-	`, artifactID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 func appOrderBy(sortMode string) string {
 	switch sortMode {
 	case "popular":
