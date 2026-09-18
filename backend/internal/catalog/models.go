@@ -111,18 +111,18 @@ type Mirror struct {
 }
 
 type Review struct {
-	UID           string `json:"uid"`
-	UserID        int64  `json:"user_id,omitempty"`
-	Author        string `json:"author,omitempty"`
-	AvatarURL     string `json:"avatar_url,omitempty"`
-	Rating        int    `json:"rating"`
-	Title         string `json:"title,omitempty"`
-	Body          string `json:"body,omitempty"`
-	AppVersion    string `json:"app_version,omitempty"`
-	OSVersion     string `json:"os_version,omitempty"`
-	OSArch        string `json:"os_arch,omitempty"`
-	DeviceModel   string `json:"device_model,omitempty"`
-	ClientVersion string `json:"client_version,omitempty"`
+	UID           string        `json:"uid"`
+	UserID        int64         `json:"user_id,omitempty"`
+	Author        string        `json:"author,omitempty"`
+	AvatarURL     string        `json:"avatar_url,omitempty"`
+	Rating        int           `json:"rating"`
+	Title         string        `json:"title,omitempty"`
+	Body          string        `json:"body,omitempty"`
+	AppVersion    string        `json:"app_version,omitempty"`
+	OSVersion     string        `json:"os_version,omitempty"`
+	OSArch        string        `json:"os_arch,omitempty"`
+	DeviceModel   string        `json:"device_model,omitempty"`
+	ClientVersion string        `json:"client_version,omitempty"`
 	Source        string        `json:"source,omitempty"`
 	Images        []ReviewImage `json:"images,omitempty"`
 	Likes         int           `json:"likes"`
