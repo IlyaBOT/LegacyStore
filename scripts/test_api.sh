@@ -80,6 +80,42 @@ api_request() {
   printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
 }
 
+make_test_png() {
+  MTP_PATH=$1
+  MTP_WIDTH=$2
+  MTP_HEIGHT=$3
+  command -v python3 >/dev/null 2>&1 || return 127
+  python3 - "$MTP_PATH" "$MTP_WIDTH" "$MTP_HEIGHT" <<'PY'
+import struct
+import sys
+import zlib
+
+path = sys.argv[1]
+width = int(sys.argv[2])
+height = int(sys.argv[3])
+
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+
+row = bytes([0]) + bytes([40, 120, 220, 255]) * width
+raw = row * height
+png = b"\x89PNG\r\n\x1a\n"
+png += chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+png += chunk(b"IDAT", zlib.compress(raw, 9))
+png += chunk(b"IEND", b"")
+with open(path, "wb") as fh:
+    fh.write(png)
+PY
+}
+
+image_upload_request() {
+  IUR_PATH=$1
+  IUR_TOKEN=$2
+  shift 2
+  HTTP_STATUS=$(curl -sS -o "$BODY_FILE" -D "$HEADERS_FILE" -w '%{http_code}'     -X POST     -H 'X-Forwarded-Proto: https'     -H "Authorization: Bearer $IUR_TOKEN"     -H 'User-Agent: LegacyStore-API-Tests/1.0'     "$@"     "$BASE_URL$IUR_PATH")
+  printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
+}
+
 multipart_test_upload() {
   MU_PATH=$1
   MU_TOKEN=$2
