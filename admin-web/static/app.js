@@ -1470,8 +1470,11 @@ function renderUploads() {
   function architectureOptionsHTML(selected) {
     selected = selected || [];
     function checked(code) { return selected.indexOf(code) >= 0 ? " checked" : ""; }
+    var intel32Selected = selected.indexOf("i386") >= 0 || selected.indexOf("i686") >= 0;
+    var intel32Code = selected.indexOf("i686") >= 0 ? "i686" : "i386";
     return '<div class="architecture-grid">' +
-      '<label class="architecture-card"><input name="architecture" type="checkbox" value="i386"' + checked("i386") + '><span><strong>Intel 32 Bit (i386 or i686)</strong><small>Generic 32-bit Intel build. Use i686 only for a specifically i686-targeted artifact.</small></span></label>' +
+      '<label class="architecture-card architecture-card-with-select"><input name="architecture_family" type="checkbox" value="intel32"' + (intel32Selected ? " checked" : "") + '><span><strong>Intel 32 Bit (i386 or i686)</strong><small>Choose the exact catalog code when known.</small>' +
+      '<select name="intel32_code" aria-label="Intel 32-bit architecture code"><option value="i386"' + (intel32Code === "i386" ? " selected" : "") + '>i386 — generic Intel 32-bit</option><option value="i686"' + (intel32Code === "i686" ? " selected" : "") + '>i686 — i686-specific</option></select></span></label>' +
       '<label class="architecture-card"><input name="architecture" type="checkbox" value="x86_64"' + checked("x86_64") + '><span><strong>Intel 64 Bit (x86_64)</strong><small>64-bit Intel build.</small></span></label>' +
       '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc"' + checked("ppc") + '><span><strong>PowerPC 32 Bit (ppc)</strong><small>Generic 32-bit PowerPC build.</small></span></label>' +
       '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc-g3"' + checked("ppc-g3") + '><span><strong>PowerPC G3 (ppc-g3)</strong><small>G3-specific build.</small></span></label>' +
@@ -1603,7 +1606,13 @@ function renderUploads() {
   }
 
   function selectedArchitectures(form) {
-    return Array.prototype.slice.call(form.querySelectorAll('[name="architecture"]:checked')).map(function(input){return input.value;});
+    var values = Array.prototype.slice.call(form.querySelectorAll('[name="architecture"]:checked')).map(function(input){return input.value;});
+    var intel32 = form.querySelector('[name="architecture_family"][value="intel32"]');
+    var intel32Code = form.querySelector('[name="intel32_code"]');
+    if (intel32 && intel32.checked) {
+      values.unshift(intel32Code && intel32Code.value === "i686" ? "i686" : "i386");
+    }
+    return values;
   }
 
   function dataURLToBlob(dataURL) {
