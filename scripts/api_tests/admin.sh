@@ -103,9 +103,40 @@ test_admin_moderation() {
     return
   fi
 
+  api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.downloads == 0 and (.versions[0].downloads == 0)'; then
+    err "$NAME" DownloadMetadataNotCounted 'download metadata request does not increment counters' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
   api_request GET "/api/v1/files/$ARTIFACT_ID" 0
   if ! status_is 200 || ! cmp -s "$UPLOAD_FILE" "$BODY_FILE"; then
     err "$NAME" LocalFileDownload 'approved file bytes' "$(cat "$STATUS_FILE")"
+    return
+  fi
+
+  # Repeating the same anonymous full download from the same IP stays unique.
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 0
+  api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.downloads == 1 and (.versions[0].downloads == 1)'; then
+    err "$NAME" AnonymousDownloadUnique 'one completed download per IP and artifact' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  # A bot-like full fetch is served but must not change analytics.
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 0 '' '' 'curl/8.0'
+  api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.downloads == 1'; then
+    err "$NAME" BotDownloadIgnored 'bot-like user agent excluded from download counter' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  # Authenticated users are unique by user + artifact rather than by IP.
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 1 "$UPLOADER_TOKEN"
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 1 "$UPLOADER_TOKEN"
+  api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.downloads == 2 and (.versions[0].downloads == 2)'; then
+    err "$NAME" AuthenticatedDownloadUnique 'one completed download per user and artifact plus anonymous IP count' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
