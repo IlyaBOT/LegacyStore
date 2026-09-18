@@ -119,7 +119,7 @@ test_admin_moderation() {
   api_request GET "/api/v1/files/$ARTIFACT_ID" 0
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
   if ! status_is 200 || ! jq_ok '.downloads == 1 and (.versions[0].downloads == 1)'; then
-    err "$NAME" AnonymousDownloadUnique 'one completed download per IP and artifact' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" AnonymousDownloadUnique 'one completed download per IP and app version' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
@@ -136,7 +136,7 @@ test_admin_moderation() {
   api_request GET "/api/v1/files/$ARTIFACT_ID" 1 "$UPLOADER_TOKEN"
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
   if ! status_is 200 || ! jq_ok '.downloads == 2 and (.versions[0].downloads == 2)'; then
-    err "$NAME" AuthenticatedDownloadUnique 'one completed download per user and artifact plus anonymous IP count' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" AuthenticatedDownloadUnique 'one completed download per user and app version plus anonymous IP count' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
