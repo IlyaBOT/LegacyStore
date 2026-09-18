@@ -104,6 +104,7 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 
 	r.mux.HandleFunc("GET /api/v1/admin/apps", r.adminApps)
 	r.mux.HandleFunc("POST /api/v1/admin/apps", r.adminCreateApp)
+	r.mux.HandleFunc("GET /api/v1/admin/apps/{id}", r.adminApp)
 	r.mux.HandleFunc("PATCH /api/v1/admin/apps/{id}", r.adminUpdateApp)
 	r.mux.HandleFunc("DELETE /api/v1/admin/apps/{id}", r.adminDeleteApp)
 	r.mux.HandleFunc("GET /api/v1/admin/apps/{id}/versions", r.adminVersions)
