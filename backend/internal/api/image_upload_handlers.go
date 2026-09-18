@@ -96,7 +96,7 @@ func (r *Router) deleteReviewImage(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminUploadIcon(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
 	if !ok {
 		return
 	}
@@ -130,7 +130,7 @@ func (r *Router) adminUploadIcon(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminUploadScreenshots(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
 	if !ok {
 		return
 	}
