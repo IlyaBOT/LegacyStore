@@ -25,14 +25,15 @@ type Warning struct {
 }
 
 type Metadata struct {
-	Name         string `json:"name,omitempty"`
-	BundleID     string `json:"bundle_id,omitempty"`
-	Version      string `json:"version,omitempty"`
-	CategorySlug string `json:"category_slug,omitempty"`
-	MinimumOS    string `json:"minimum_os,omitempty"`
-	IconDataURL  string `json:"icon_data_url,omitempty"`
-	IconWidth    int    `json:"icon_width,omitempty"`
-	IconHeight   int    `json:"icon_height,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	BundleID      string   `json:"bundle_id,omitempty"`
+	Version       string   `json:"version,omitempty"`
+	CategorySlug  string   `json:"category_slug,omitempty"`
+	MinimumOS     string   `json:"minimum_os,omitempty"`
+	Architectures []string `json:"architectures,omitempty"`
+	IconDataURL   string   `json:"icon_data_url,omitempty"`
+	IconWidth     int      `json:"icon_width,omitempty"`
+	IconHeight    int      `json:"icon_height,omitempty"`
 }
 
 type Result struct {
@@ -145,6 +146,19 @@ func inspectZip(path string, result *Result) error {
 		return err
 	}
 	applyPlist(values, &result.Metadata)
+
+	executableName := plistString(values, "CFBundleExecutable")
+	if executableName != "" {
+		prefix := filepath.ToSlash(plistFile.Name)
+		prefix = strings.TrimSuffix(prefix, "Info.plist") + "MacOS/"
+		if executableFile := findZipExecutable(reader.File, prefix, executableName); executableFile != nil {
+			if architectures, archErr := inspectZipMachO(executableFile); archErr == nil {
+				result.Metadata.Architectures = architectures
+			} else {
+				result.addWarning("architecture_parse_failed", "Исполняемый файл найден, но архитектуру Mach-O определить не удалось.")
+			}
+		}
+	}
 
 	iconName := plistString(values, "CFBundleIconFile", "CFBundleIconName")
 	if iconName != "" {
@@ -363,6 +377,16 @@ func inspectExtractedTree(root string, result *Result) error {
 	}
 	applyPlist(values, &result.Metadata)
 
+	executableName := plistString(values, "CFBundleExecutable")
+	if executableName != "" {
+		executablePath := filepath.Join(filepath.Dir(plistPath), "MacOS", filepath.Base(executableName))
+		if architectures, archErr := inspectMachOFile(executablePath); archErr == nil {
+			result.Metadata.Architectures = architectures
+		} else if _, statErr := os.Stat(executablePath); statErr == nil {
+			result.addWarning("architecture_parse_failed", "Исполняемый файл найден, но архитектуру Mach-O определить не удалось.")
+		}
+	}
+
 	iconName := plistString(values, "CFBundleIconFile", "CFBundleIconName")
 	if iconName == "" {
 		return nil
@@ -475,6 +499,9 @@ func (result *Result) validateMetadata() {
 	if strings.TrimSpace(result.Metadata.MinimumOS) == "" {
 		result.addWarning("missing_minimum_os", "Минимальная версия OS X/macOS не указана в метаданных.")
 	}
+	if len(result.Metadata.Architectures) == 0 {
+		result.addWarning("missing_architecture", "Архитектуру исполняемого файла определить не удалось; выберите её вручную.")
+	}
 	if strings.TrimSpace(result.Metadata.IconDataURL) == "" {
 		result.addWarning("missing_icon", "Иконку приложения не удалось найти или декодировать.")
 	}
@@ -518,6 +545,36 @@ func readZipFile(file *zip.File, max int64) ([]byte, error) {
 		return nil, errors.New("metadata file is too large")
 	}
 	return data, nil
+}
+
+func findZipExecutable(files []*zip.File, prefix, executableName string) *zip.File {
+	target := strings.ToLower(filepath.Base(strings.TrimSpace(executableName)))
+	if target == "" {
+		return nil
+	}
+	for _, file := range files {
+		name := filepath.ToSlash(file.Name)
+		if !strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+			continue
+		}
+		if strings.ToLower(filepath.Base(name)) == target {
+			return file
+		}
+	}
+	return nil
+}
+
+func inspectZipMachO(file *zip.File) ([]string, error) {
+	reader, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	header, err := io.ReadAll(io.LimitReader(reader, 64<<10))
+	if err != nil {
+		return nil, err
+	}
+	return inspectMachOPrefix(header)
 }
 
 func findZipIcon(files []*zip.File, prefix, iconName string) *zip.File {
