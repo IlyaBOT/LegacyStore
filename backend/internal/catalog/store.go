@@ -365,7 +365,17 @@ func (s *Store) Reviews(ctx context.Context, slug string) ([]Review, error) {
 		}
 		reviews = append(reviews, review)
 	}
-	return reviews, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	images, err := s.reviewImages(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range reviews {
+		reviews[i].Images = images[reviews[i].UID]
+	}
+	return reviews, nil
 }
 
 func (s *Store) artifactsForApp(ctx context.Context, appID int64) ([]artifactRow, error) {
