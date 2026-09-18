@@ -1,5 +1,7 @@
 BEGIN;
 
+DROP VIEW IF EXISTS app_engagement_stats;
+
 DROP TABLE IF EXISTS app_view_events;
 
 DROP INDEX IF EXISTS download_events_completed_app_idx;
