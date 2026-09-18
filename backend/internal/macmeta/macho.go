@@ -3,10 +3,84 @@ package macmeta
 import (
 	"bytes"
 	"debug/macho"
+	"encoding/binary"
 	"errors"
 	"os"
 	"sort"
 )
+
+func inspectMachOPrefix(data []byte) ([]string, error) {
+	if len(data) < 12 {
+		return nil, errors.New("Mach-O executable is too small")
+	}
+
+	magicBE := binary.BigEndian.Uint32(data[:4])
+	magicLE := binary.LittleEndian.Uint32(data[:4])
+
+	switch magicBE {
+	case 0xcafebabe, 0xcafebabf:
+		if len(data) < 8 {
+			return nil, errors.New("fat Mach-O header is truncated")
+		}
+		count := int(binary.BigEndian.Uint32(data[4:8]))
+		entrySize := 20
+		if magicBE == 0xcafebabf {
+			entrySize = 32
+		}
+		if count < 1 || count > 128 || len(data) < 8+count*entrySize {
+			return nil, errors.New("invalid fat Mach-O architecture table")
+		}
+		values := make([]string, 0, count)
+		for i := 0; i < count; i++ {
+			offset := 8 + i*entrySize
+			cpu := macho.Cpu(binary.BigEndian.Uint32(data[offset : offset+4]))
+			subCPU := binary.BigEndian.Uint32(data[offset+4 : offset+8])
+			if value := machoArchitecture(cpu, subCPU); value != "" {
+				values = append(values, value)
+			}
+		}
+		return normalizeMachOArchitectures(values)
+	case 0xbebafeca, 0xbfbafeca:
+		if len(data) < 8 {
+			return nil, errors.New("swapped fat Mach-O header is truncated")
+		}
+		count := int(binary.LittleEndian.Uint32(data[4:8]))
+		entrySize := 20
+		if magicBE == 0xbfbafeca {
+			entrySize = 32
+		}
+		if count < 1 || count > 128 || len(data) < 8+count*entrySize {
+			return nil, errors.New("invalid swapped fat Mach-O architecture table")
+		}
+		values := make([]string, 0, count)
+		for i := 0; i < count; i++ {
+			offset := 8 + i*entrySize
+			cpu := macho.Cpu(binary.LittleEndian.Uint32(data[offset : offset+4]))
+			subCPU := binary.LittleEndian.Uint32(data[offset+4 : offset+8])
+			if value := machoArchitecture(cpu, subCPU); value != "" {
+				values = append(values, value)
+			}
+		}
+		return normalizeMachOArchitectures(values)
+	}
+
+	var order binary.ByteOrder
+	switch {
+	case magicBE == 0xfeedface || magicBE == 0xfeedfacf:
+		order = binary.BigEndian
+	case magicLE == 0xfeedface || magicLE == 0xfeedfacf:
+		order = binary.LittleEndian
+	default:
+		return nil, errors.New("not a Mach-O executable")
+	}
+	cpu := macho.Cpu(order.Uint32(data[4:8]))
+	subCPU := order.Uint32(data[8:12])
+	value := machoArchitecture(cpu, subCPU)
+	if value == "" {
+		return nil, errors.New("unsupported Mach-O CPU type")
+	}
+	return []string{value}, nil
+}
 
 func inspectMachOBytes(data []byte) ([]string, error) {
 	if len(data) < 28 {
