@@ -82,6 +82,11 @@ func TestSVGIconSanitizedAndScaled(t *testing.T) {
 	if _, err := Process(strings.NewReader(unsafe), "bad.svg", IconPolicy()); !errorsIs(err, ErrUnsafeSVG) {
 		t.Fatalf("unsafe SVG error = %v, want ErrUnsafeSVG", err)
 	}
+
+	tooLarge := `<svg xmlns="http://www.w3.org/2000/svg" width="4096" height="512" viewBox="0 0 4096 512"><rect width="4096" height="512"/></svg>`
+	if _, err := Process(strings.NewReader(tooLarge), "too-large.svg", IconPolicy()); !errorsIs(err, ErrDimensionsTooLarge) {
+		t.Fatalf("oversized SVG error = %v, want ErrDimensionsTooLarge", err)
+	}
 }
 
 func errorsIs(err, target error) bool {
