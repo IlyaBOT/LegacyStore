@@ -725,6 +725,8 @@
       '<div class="form-row field-wide"><label>Title</label><input name="title" type="text" maxlength="120" placeholder="Short summary"></div></div>' +
       '<div class="form-row"><label>Review</label><textarea name="body" maxlength="300" placeholder="Up to 300 characters" required></textarea>' +
       '<small>Maximum 300 characters. Browser/OS information is recorded only when available.</small></div>' +
+      '<div class="form-row"><label>Images (optional)</label><input name="images" type="file" accept="image/jpeg,image/png,image/gif" multiple>' +
+      '<small>Up to 3 images, 2 MB each, maximum 2048×2048. Images are recompressed and stored at no more than 1 MB each.</small></div>' +
       '<button class="blue-button" type="submit">Post Review</button><div id="reviewNotice" class="form-message"></div></form>' : "";
     return '<section class="reviews-section">' + form + '<h2>Reviews</h2><div id="reviewsList" class="loading">Loading...</div></section>';
   }
@@ -747,8 +749,24 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         var data = formJSON(form);
+        delete data.images;
         data.rating = Number(data.rating || 5);
-        jsonRequest("POST", "/apps/" + encodeURIComponent(slug) + "/reviews", data).then(function () {
+        var imageInput = form.querySelector('[name="images"]');
+        var files = imageInput && imageInput.files ? Array.prototype.slice.call(imageInput.files) : [];
+        if (files.length > 3) {
+          showMessage("reviewNotice", "A review can contain at most 3 images.", true);
+          return;
+        }
+        if (files.some(function (file) { return file.size > 2 * 1024 * 1024; })) {
+          showMessage("reviewNotice", "Each review image must be 2 MB or smaller.", true);
+          return;
+        }
+        jsonRequest("POST", "/apps/" + encodeURIComponent(slug) + "/reviews", data).then(function (payload) {
+          if (!files.length) { return payload; }
+          var formData = new FormData();
+          files.forEach(function (file) { formData.append("images", file, file.name); });
+          return api("/reviews/" + encodeURIComponent(payload.review.uid) + "/images", { method: "POST", body: formData });
+        }).then(function () {
           form.reset();
           return loadReviews(slug);
         }).catch(function (error) { showMessage("reviewNotice", humanError(error), true); });
@@ -761,9 +779,13 @@
         var avatar = review.avatar_url ?
           '<img class="review-avatar" src="' + escapeHTML(review.avatar_url) + '" alt="">' :
           '<span class="review-avatar review-avatar-fallback">' + escapeHTML((review.author || "U").slice(0, 1).toUpperCase()) + '</span>';
+        var images = (review.images || []).length ? '<div class="review-image-strip">' + (review.images || []).map(function (image) {
+          return '<a href="' + escapeHTML(image.url) + '" target="_blank" rel="noopener"><img class="review-upload-image" src="' +
+            escapeHTML(image.url) + '" alt="Review image" loading="lazy"></a>';
+        }).join("") + '</div>' : "";
         return '<li><span class="review-main">' + avatar + '<span><strong>' + escapeHTML(review.author || "User") + '</strong> ' + ratingDots(review.rating) +
           (context ? '<br><small class="review-context">' + escapeHTML(context) + '</small>' : "") +
-          '<br>' + escapeHTML(review.title || "") + '<br><small>' + escapeHTML(review.body || "") + '</small></span></span><span>' +
+          '<br>' + escapeHTML(review.title || "") + '<br><small>' + escapeHTML(review.body || "") + '</small>' + images + '</span></span><span>' +
           escapeHTML(review.likes || 0) + ' likes' +
           (state.currentUser ? ' <button class="metal-button small-action" data-like-review="' + escapeHTML(review.uid || "") + '" type="button">Like</button>' : "") +
           '</span></li>';
@@ -857,9 +879,10 @@
       '<section class="bento-card profile-edit-card"><h2>Profile details</h2><p class="panel-help">Public nickname and optional avatar used on reviews and account pages.</p>' +
       '<form id="profileForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Nickname</label><input name="nickname" type="text" maxlength="80" ' +
       'placeholder="Steve Jobs" value="' + escapeHTML(user.nickname || "") + '"><small>Shown next to your reviews and submissions.</small></div>' +
-      '<div class="form-row field-wide"><label>Avatar URL</label><input name="avatar_url" type="url" placeholder="https://example.com/avatar.png" value="' +
-      escapeHTML(user.avatar_url || "") + '"><small>HTTPS image URL. Leave empty to use your initials.</small></div></div>' +
-      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button></div></form></section>' +
+      '<div class="form-row field-wide"><label>Avatar image</label><input name="avatar_file" type="file" accept="image/jpeg,image/png,image/gif">' +
+      '<small>JPEG/PNG/GIF, up to 2 MB and 2048×2048. Stored at up to 512×512 and compressed to at most 1 MB.</small></div></div>' +
+      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button>' +
+      (user.avatar_url ? '<button class="metal-button" id="deleteAvatarButton" type="button">Remove avatar</button>' : "") + '</div></form></section>' +
       '<section class="bento-card profile-status-card"><h2>Account</h2><div class="account-metric-grid">' +
       '<div class="account-metric"><span>Email</span><strong>' + (user.email_verified ? "Verified" : "Not verified") + '</strong></div>' +
       '<div class="account-metric"><span>Two-factor authentication</span><strong>' + (user.two_factor_enabled ? "Enabled" : "Off") + '</strong></div></div>' +
@@ -1097,12 +1120,40 @@
     if (profile) {
       profile.addEventListener("submit", function (event) {
         event.preventDefault();
-        jsonRequest("PATCH", "/me", formJSON(profile)).then(function (payload) {
+        var avatarInput = profile.querySelector('[name="avatar_file"]');
+        var avatarFile = avatarInput && avatarInput.files ? avatarInput.files[0] : null;
+        if (avatarFile && avatarFile.size > 2 * 1024 * 1024) {
+          showMessage("profileNotice", "Avatar must be 2 MB or smaller.", true);
+          return;
+        }
+        jsonRequest("PATCH", "/me", {
+          nickname: profile.querySelector('[name="nickname"]').value || "",
+          avatar_url: ""
+        }).then(function (payload) {
+          state.currentUser = payload.user;
+          if (!avatarFile) { return payload; }
+          var formData = new FormData();
+          formData.append("file", avatarFile, avatarFile.name);
+          return api("/me/avatar", { method: "POST", body: formData });
+        }).then(function () {
+          return api("/me");
+        }).then(function (payload) {
           state.currentUser = payload.user;
           showMessage("profileNotice", "Saved", false);
           renderSidebar();
+          renderAccount("profile");
         }).catch(function (error) { showMessage("profileNotice", humanError(error), true); });
       });
+      var deleteAvatarButton = document.getElementById("deleteAvatarButton");
+      if (deleteAvatarButton) {
+        deleteAvatarButton.addEventListener("click", function () {
+          api("/me/avatar", { method: "DELETE" }).then(function () { return api("/me"); }).then(function (payload) {
+            state.currentUser = payload.user;
+            renderSidebar();
+            renderAccount("profile");
+          }).catch(function (error) { showMessage("profileNotice", humanError(error), true); });
+        });
+      }
     }
     if (setup2FA) {
       setup2FA.addEventListener("submit", function (event) {
@@ -1557,17 +1608,35 @@
     return formData;
   }
 
+  function dataURLToBlob(dataURL) {
+    var parts = String(dataURL || "").split(",");
+    if (parts.length !== 2) { throw new Error("invalid_image_data"); }
+    var mimeMatch = parts[0].match(/^data:([^;]+);base64$/i);
+    if (!mimeMatch) { throw new Error("invalid_image_data"); }
+    var binary = atob(parts[1]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) { bytes[i] = binary.charCodeAt(i); }
+    return new Blob([bytes], { type: mimeMatch[1] });
+  }
+
   function maybeSaveDetectedIcon(appId, versionId, form) {
     var inspection = state.uploadContext.inspection || {};
     var metadata = inspection.metadata || {};
     if (!metadata.icon_data_url) { return Promise.resolve(); }
-    return jsonRequest("POST", "/admin/apps/" + encodeURIComponent(appId) + "/icons", {
-      app_version_id: Number(versionId || 0),
-      image_url: metadata.icon_data_url,
-      min_os: form.querySelector('[name="min_os"]').value || "",
-      max_os: form.querySelector('[name="max_supported_os"]').value || "",
-      width: Number(metadata.icon_width || 0),
-      height: Number(metadata.icon_height || 0)
+    var blob;
+    try {
+      blob = dataURLToBlob(metadata.icon_data_url);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    var formData = new FormData();
+    formData.append("file", blob, "detected-icon.png");
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value || "");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
+      method: "POST",
+      body: formData
     }).catch(function (error) {
       showToast("Иконка распознана, но сохранить её не удалось: " + humanError(error), "error");
     });
