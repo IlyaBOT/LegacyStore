@@ -14,9 +14,12 @@ type appRow struct {
 	Category    string
 	Icon        string
 	HeroImage   string
-	Rating      float64
-	RatingCount int
-	Downloads   int64
+	Rating          float64
+	RatingCount     int
+	PositiveReviews int64
+	Downloads       int64
+	Views           int64
+	PopularityScore float64
 }
 
 type appDetailRow struct {
