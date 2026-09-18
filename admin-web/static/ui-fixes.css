@@ -1403,3 +1403,163 @@
 input[type="file"] {
   max-width: 100%;
 }
+
+
+/* Contribution workflow */
+.create-app-form .upload-app-card {
+  grid-column: span 8;
+}
+
+.create-app-form .upload-media-card {
+  grid-column: span 4;
+}
+
+.contributor-app-head .badge-row {
+  margin-top: 7px;
+}
+
+.contributor-summary {
+  margin-bottom: 14px;
+}
+
+.contributor-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin-bottom: 12px;
+}
+
+.contributor-metadata-grid p {
+  margin: 0;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.contribution-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.contribution-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #c9ced4;
+  border-radius: 7px;
+  background: linear-gradient(#f8f8f8, #e8eaed);
+  color: #6a737d;
+}
+
+.contribution-step > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #b8bec5;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.contribution-step.is-active {
+  border-color: #7aa7d7;
+  background: linear-gradient(#f7fbff, #e3f0ff);
+  color: #255d9b;
+}
+
+.contribution-step.is-active > span {
+  border-color: #5f94cf;
+  background: #4c8bd1;
+  color: #fff;
+}
+
+.contribution-step.is-complete {
+  border-color: #9dbd99;
+  background: linear-gradient(#fbfffa, #e6f2e3);
+  color: #3d6e37;
+}
+
+.contribution-step.is-complete > span {
+  border-color: #7bab74;
+  background: #6eaa65;
+  color: #fff;
+}
+
+.contribution-upload-card {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.architecture-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.architecture-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #d6dbe0;
+  border-radius: 7px;
+  background: #f8f9fa;
+}
+
+.architecture-card input {
+  margin-top: 2px;
+}
+
+.architecture-card span {
+  min-width: 0;
+}
+
+.architecture-card strong,
+.architecture-card small {
+  display: block;
+}
+
+.architecture-card small {
+  margin-top: 3px;
+  color: #87909a;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.compact-capabilities {
+  margin-top: 12px;
+}
+
+.inspection-warning-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.inspection-warning-list .web-security-note {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .architecture-grid,
+  .contribution-steps,
+  .contributor-metadata-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .create-app-form .upload-app-card,
+  .create-app-form .upload-media-card {
+    grid-column: 1 / -1;
+  }
+}
