@@ -136,12 +136,12 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 		}
 
 		summary := AppSummary{
-			Slug:          row.Slug,
-			Name:          row.Name,
-			Category:      row.Category,
-			Summary:       row.Summary,
-			Icon:          row.Icon,
-			HeroImage:     row.HeroImage,
+			Slug:            row.Slug,
+			Name:            row.Name,
+			Category:        row.Category,
+			Summary:         row.Summary,
+			Icon:            row.Icon,
+			HeroImage:       row.HeroImage,
 			Rating:          roundRating(row.Rating),
 			RatingCount:     row.RatingCount,
 			PositiveReviews: row.PositiveReviews,
