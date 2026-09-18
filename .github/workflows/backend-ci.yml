@@ -9,9 +9,7 @@ on:
     paths:
       - 'backend/**'
       - 'admin-web/**'
-      - 'scripts/test_api.sh'
-      - 'scripts/test_web.sh'
-      - 'scripts/api_tests/**'
+      - 'scripts/**'
       - 'docker-compose.yml'
       - '.github/workflows/backend-ci.yml'
 
@@ -51,6 +49,10 @@ jobs:
       - name: Validate web JavaScript
         working-directory: .
         run: node --check admin-web/static/app.js
+
+      - name: Validate shell scripts
+        working-directory: .
+        run: sh -n scripts/*.sh scripts/api_tests/*.sh
 
       - name: Validate nginx configuration inputs
         working-directory: .
