@@ -166,6 +166,27 @@ plain_http_rejected() {
   ok "$N"
 }
 
+ranking_lists() {
+  N=WebRankingLists
+
+  request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=popular'
+  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and ([.apps[].popularity_score] == ([.apps[].popularity_score] | sort | reverse))'; then
+    fail "$N" Popular 'top 10 sorted by descending server-side popularity score' "$STATUS $(cat "$BODY")"; return
+  fi
+
+  request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=downloads'
+  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and .apps[0].slug == "pixelmator" and .apps[0].downloads >= 50'; then
+    fail "$N" Downloads 'top 10 by completed unique download count' "$STATUS $(cat "$BODY")"; return
+  fi
+
+  request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=new'
+  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and .apps[0].name == "API Uploaded App" and (.apps | any(.slug == "libreoffice"))'; then
+    fail "$N" NewReleases 'top 10 newest catalog uploads with the integration upload first' "$STATUS $(cat "$BODY")"; return
+  fi
+
+  ok "$N"
+}
+
 admin_upload() {
   N=WebAdminAndUpload
   AE=${API_TEST_ADMIN_EMAIL:-}; AP=${API_TEST_ADMIN_PASSWORD:-}
@@ -205,6 +226,7 @@ frontend_bundle
 proxy_bootstrap
 account_lifecycle
 plain_http_rejected
+ranking_lists
 admin_upload
 
 if [ "$FAILED" -eq 0 ]; then echo 'All web integration tests passed.'; else echo 'Web integration tests finished with errors.'; fi

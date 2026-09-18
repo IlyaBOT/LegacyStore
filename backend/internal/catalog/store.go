@@ -94,24 +94,16 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				ORDER BY sort_order, id
 				LIMIT 1
 			), '') AS hero_image,
-			COALESCE((
-				SELECT AVG(rating)::float8
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			), 0) AS rating,
-			(
-				SELECT COUNT(*)
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			) AS rating_count,
-			(
-				SELECT COUNT(*)
-				FROM download_events de
-				WHERE de.app_id = a.id
-			) AS downloads
+			COALESCE(stats.average_rating, 0) AS rating,
+			COALESCE(stats.review_count, 0) AS rating_count,
+			COALESCE(stats.positive_review_count, 0) AS positive_reviews,
+			COALESCE(stats.download_count, 0) AS downloads,
+			COALESCE(stats.view_count, 0) AS views,
+			COALESCE(stats.popularity_score, 0) AS popularity_score
 		FROM apps a
 		JOIN app_categories ac ON ac.app_id = a.id
 		JOIN categories c ON c.id = ac.category_id
+		LEFT JOIN app_engagement_stats stats ON stats.app_id = a.id
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
@@ -126,7 +118,11 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 	var apps []AppSummary
 	for rows.Next() {
 		var row appRow
-		if err := rows.Scan(&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category, &row.Icon, &row.HeroImage, &row.Rating, &row.RatingCount, &row.Downloads); err != nil {
+		if err := rows.Scan(
+			&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category,
+			&row.Icon, &row.HeroImage, &row.Rating, &row.RatingCount,
+			&row.PositiveReviews, &row.Downloads, &row.Views, &row.PopularityScore,
+		); err != nil {
 			return nil, err
 		}
 
@@ -140,17 +136,20 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 		}
 
 		summary := AppSummary{
-			Slug:          row.Slug,
-			Name:          row.Name,
-			Category:      row.Category,
-			Summary:       row.Summary,
-			Icon:          row.Icon,
-			HeroImage:     row.HeroImage,
-			Rating:        roundRating(row.Rating),
-			RatingCount:   row.RatingCount,
-			Downloads:     row.Downloads,
-			ArchBadges:    archBadges(selected),
-			Compatibility: result,
+			Slug:            row.Slug,
+			Name:            row.Name,
+			Category:        row.Category,
+			Summary:         row.Summary,
+			Icon:            row.Icon,
+			HeroImage:       row.HeroImage,
+			Rating:          roundRating(row.Rating),
+			RatingCount:     row.RatingCount,
+			PositiveReviews: row.PositiveReviews,
+			Downloads:       row.Downloads,
+			Views:           row.Views,
+			PopularityScore: row.PopularityScore,
+			ArchBadges:      archBadges(selected),
+			Compatibility:   result,
 		}
 		if selected != nil {
 			summary.RecommendedVersion = selected.Version
@@ -182,19 +181,14 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 				ORDER BY app_version_id NULLS FIRST, id
 				LIMIT 1
 			), '') AS icon,
-			COALESCE((
-				SELECT AVG(rating)::float8
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			), 0) AS rating,
-			(
-				SELECT COUNT(*)
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			) AS rating_count
+			COALESCE(stats.average_rating, 0) AS rating,
+			COALESCE(stats.review_count, 0) AS rating_count,
+			COALESCE(stats.download_count, 0) AS downloads,
+			COALESCE(stats.view_count, 0) AS views
 		FROM apps a
 		JOIN app_categories ac ON ac.app_id = a.id
 		JOIN categories c ON c.id = ac.category_id
+		LEFT JOIN app_engagement_stats stats ON stats.app_id = a.id
 		WHERE a.slug = $1 AND a.moderation_status = 'approved'
 		LIMIT 1
 	`, slug).Scan(
@@ -211,6 +205,8 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		&row.Icon,
 		&row.Rating,
 		&row.RatingCount,
+		&row.Downloads,
+		&row.Views,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -230,6 +226,15 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		return nil, err
 	}
 
+	versions := versionsFromArtifacts(target, artifacts)
+	versionDownloads, err := s.VersionDownloadCounts(ctx, row.ID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range versions {
+		versions[i].Downloads = versionDownloads[versions[i].Version]
+	}
+
 	detail := &AppDetail{
 		Slug:          row.Slug,
 		Name:          row.Name,
@@ -244,7 +249,9 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		Screenshots:   screenshots,
 		Rating:        roundRating(row.Rating),
 		RatingCount:   row.RatingCount,
-		Versions:      versionsFromArtifacts(target, artifacts),
+		Downloads:     row.Downloads,
+		Views:         row.Views,
+		Versions:      versions,
 		Compatibility: result,
 	}
 	if selected != nil {
@@ -271,7 +278,15 @@ func (s *Store) Versions(ctx context.Context, slug string, target compatibility.
 	if err != nil {
 		return nil, err
 	}
-	return versionsFromArtifacts(target, artifacts), nil
+	versions := versionsFromArtifacts(target, artifacts)
+	counts, err := s.VersionDownloadCounts(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range versions {
+		versions[i].Downloads = counts[versions[i].Version]
+	}
+	return versions, nil
 }
 
 func (s *Store) Download(ctx context.Context, artifactID int64, target compatibility.Target) (*DownloadMetadata, error) {
@@ -309,15 +324,23 @@ func (s *Store) Reviews(ctx context.Context, slug string) ([]Review, error) {
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.id,
+		SELECT r.public_uid,
 		       r.user_id,
 		       COALESCE(NULLIF(u.nickname, ''), u.email) AS author,
+		       COALESCE(u.avatar_url, '') AS avatar_url,
 		       r.rating,
 		       COALESCE(r.title, ''),
 		       COALESCE(r.body, ''),
+		       COALESCE(r.app_version, ''),
+		       COALESCE(r.os_version, ''),
+		       COALESCE(r.os_arch, ''),
+		       COALESCE(r.device_model, ''),
+		       COALESCE(r.client_version, ''),
+		       r.source,
 		       (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS likes,
 		       (SELECT COUNT(*) FROM review_replies rr WHERE rr.review_id = r.id AND rr.deleted_at IS NULL) AS replies,
-		       r.created_at::text
+		       r.created_at::text,
+		       r.updated_at::text
 		FROM reviews r
 		JOIN users u ON u.id = r.user_id
 		WHERE r.app_id = $1 AND r.deleted_at IS NULL
@@ -332,12 +355,27 @@ func (s *Store) Reviews(ctx context.Context, slug string) ([]Review, error) {
 	reviews := make([]Review, 0)
 	for rows.Next() {
 		var review Review
-		if err := rows.Scan(&review.ID, &review.UserID, &review.Author, &review.Rating, &review.Title, &review.Body, &review.Likes, &review.Replies, &review.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&review.UID, &review.UserID, &review.Author, &review.AvatarURL,
+			&review.Rating, &review.Title, &review.Body, &review.AppVersion,
+			&review.OSVersion, &review.OSArch, &review.DeviceModel, &review.ClientVersion,
+			&review.Source, &review.Likes, &review.Replies, &review.CreatedAt, &review.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		reviews = append(reviews, review)
 	}
-	return reviews, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	images, err := s.reviewImages(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range reviews {
+		reviews[i].Images = images[reviews[i].UID]
+	}
+	return reviews, nil
 }
 
 func (s *Store) artifactsForApp(ctx context.Context, appID int64) ([]artifactRow, error) {

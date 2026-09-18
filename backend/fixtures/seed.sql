@@ -139,6 +139,13 @@ SELECT a.id, sv.version, sv.release_date, sv.changelog, sv.is_recommended
 FROM seed_versions sv
 JOIN apps a ON a.slug = sv.app_slug;
 
+-- Fixtures emulate the date each release was first published to this catalog.
+-- Production uses app_versions.created_at as the "new release" ordering key.
+UPDATE app_versions
+SET created_at = release_date::timestamptz,
+    updated_at = release_date::timestamptz
+WHERE release_date IS NOT NULL;
+
 CREATE TEMP TABLE seed_artifacts (
     app_slug text NOT NULL,
     version text NOT NULL,
@@ -225,24 +232,24 @@ WHERE primary_download_url IS NOT NULL;
 
 -- Stable download history for ranking/feed integration tests:
 -- Pixelmator wins all-time, VLC wins the last seven days, Transmission wins the last 24 hours.
-INSERT INTO download_events (artifact_id, app_id, created_at)
-SELECT ar.id, a.id, now() - interval '45 days' - (g * interval '1 minute')
+INSERT INTO download_events (artifact_id, app_id, app_version_id, created_at, completed_at)
+SELECT ar.id, a.id, ar.app_version_id, now() - interval '45 days' - (g * interval '1 minute'), now() - interval '45 days' - (g * interval '1 minute')
 FROM apps a
 JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
 JOIN artifacts ar ON ar.app_version_id = av.id
 CROSS JOIN generate_series(1, 50) AS g
 WHERE a.slug = 'pixelmator';
 
-INSERT INTO download_events (artifact_id, app_id, created_at)
-SELECT ar.id, a.id, now() - interval '2 days' - (g * interval '1 minute')
+INSERT INTO download_events (artifact_id, app_id, app_version_id, created_at, completed_at)
+SELECT ar.id, a.id, ar.app_version_id, now() - interval '2 days' - (g * interval '1 minute'), now() - interval '2 days' - (g * interval '1 minute')
 FROM apps a
 JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
 JOIN artifacts ar ON ar.app_version_id = av.id
 CROSS JOIN generate_series(1, 30) AS g
 WHERE a.slug = 'vlc';
 
-INSERT INTO download_events (artifact_id, app_id, created_at)
-SELECT ar.id, a.id, now() - interval '6 hours' - (g * interval '1 minute')
+INSERT INTO download_events (artifact_id, app_id, app_version_id, created_at, completed_at)
+SELECT ar.id, a.id, ar.app_version_id, now() - interval '6 hours' - (g * interval '1 minute'), now() - interval '6 hours' - (g * interval '1 minute')
 FROM apps a
 JOIN app_versions av ON av.app_id = a.id AND av.is_recommended
 JOIN artifacts ar ON ar.app_version_id = av.id

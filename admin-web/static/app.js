@@ -685,8 +685,9 @@
         compatibilityPill(app.compatibility) + '</div></div><div class="detail-actions"><button class="blue-button" id="downloadButton" type="button"' +
         (!artifact.id || blocked ? " disabled" : "") + '>Download</button><button class="metal-button" data-route="catalog" type="button">Back to Catalog</button></div></section>' +
         '<div class="detail-grid"><section class="detail-copy"><h2>Description</h2><p>' + escapeHTML(app.description || "") + '</p>' + screenshotStrip(app) +
-        compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app.slug) + '</section><aside class="side-box"><h2>Information</h2>' +
+        compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app) + '</section><aside class="side-box"><h2>Information</h2>' +
         infoRow("Category", app.category) + infoRow("Version", artifact.version) + infoRow("Size", formatSize(artifact.size_bytes)) + infoRow("Package", artifact.package_type) +
+        infoRow("Downloads", app.downloads) + infoRow("Unique views", app.views) +
         artifactSystemRequirementsHTML(artifact) + infoRow("Minimum macOS", artifact.min_os) + infoRow("Maximum supported", artifact.max_supported_os) +
         infoRow("SHA-256", artifact.sha256) + '</aside></div>';
       bindRouteButtons(main);
@@ -697,6 +698,7 @@
         button.addEventListener("click", function () { loadDownloadMetadata(artifact.id, app.name, artifact.version); });
       }
       loadReviews(app.slug);
+      jsonRequest("POST", "/apps/" + encodeURIComponent(app.slug) + "/view", {}).catch(function () {});
       setStatus("Showing: " + app.name, "1 item", "Version: " + (artifact.version || ""));
       renderSidebar();
     }).catch(renderError);
@@ -710,12 +712,33 @@
     });
   }
 
-  function reviewsHTML(slug) {
-    var form = state.currentUser ? '<form id="reviewForm" class="review-form" data-slug="' + escapeHTML(slug) + '"><h2>Your Review</h2>' +
-      '<div class="filter-bar"><select name="rating" aria-label="Rating"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>' +
-      '<input name="title" type="text" placeholder="Title"></div><div class="form-row"><label>Review</label><textarea name="body" required></textarea></div>' +
+  function reviewsHTML(app) {
+    var versions = (app.versions || []).map(function (version) { return version.version; });
+    var versionOptions = '<option value="">Unknown / not installed</option>' + versions.map(function (version) {
+      return '<option value="' + escapeHTML(version) + '">' + escapeHTML(version) + '</option>';
+    }).join("");
+    var form = state.currentUser ? '<form id="reviewForm" class="review-form" data-slug="' + escapeHTML(app.slug) + '"><h2>Your Review</h2>' +
+      '<div class="compact-field-grid"><div class="form-row field-version"><label>Rating</label><select name="rating" aria-label="Rating">' +
+      '<option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>' +
+      '<div class="form-row field-medium"><label>Application version</label><select name="app_version">' + versionOptions + '</select>' +
+      '<small>Select the version you actually used.</small></div>' +
+      '<div class="form-row field-wide"><label>Title</label><input name="title" type="text" maxlength="120" placeholder="Short summary"></div></div>' +
+      '<div class="form-row"><label>Review</label><textarea name="body" maxlength="300" placeholder="Up to 300 characters" required></textarea>' +
+      '<small>Maximum 300 characters. Browser/OS information is recorded only when available.</small></div>' +
+      '<div class="form-row"><label>Images (optional)</label><input name="images" type="file" accept="image/jpeg,image/png,image/gif" multiple>' +
+      '<small>Up to 3 images, 2 MB each, maximum 2048×2048. Images are recompressed and stored at no more than 1 MB each.</small></div>' +
       '<button class="blue-button" type="submit">Post Review</button><div id="reviewNotice" class="form-message"></div></form>' : "";
     return '<section class="reviews-section">' + form + '<h2>Reviews</h2><div id="reviewsList" class="loading">Loading...</div></section>';
+  }
+
+  function reviewContextLine(review) {
+    var parts = [];
+    if (review.app_version) { parts.push("App " + review.app_version); }
+    if (review.os_version) { parts.push("OS X " + review.os_version); }
+    if (review.os_arch) { parts.push(review.os_arch); }
+    if (review.device_model) { parts.push(review.device_model); }
+    if (review.client_version) { parts.push("LegacyStore " + review.client_version); }
+    return parts.join(" · ");
   }
 
   function loadReviews(slug) {
@@ -726,8 +749,24 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         var data = formJSON(form);
+        delete data.images;
         data.rating = Number(data.rating || 5);
-        jsonRequest("POST", "/apps/" + encodeURIComponent(slug) + "/reviews", data).then(function () {
+        var imageInput = form.querySelector('[name="images"]');
+        var files = imageInput && imageInput.files ? Array.prototype.slice.call(imageInput.files) : [];
+        if (files.length > 3) {
+          showMessage("reviewNotice", "A review can contain at most 3 images.", true);
+          return;
+        }
+        if (files.some(function (file) { return file.size > 2 * 1024 * 1024; })) {
+          showMessage("reviewNotice", "Each review image must be 2 MB or smaller.", true);
+          return;
+        }
+        jsonRequest("POST", "/apps/" + encodeURIComponent(slug) + "/reviews", data).then(function (payload) {
+          if (!files.length) { return payload; }
+          var formData = new FormData();
+          files.forEach(function (file) { formData.append("images", file, file.name); });
+          return api("/reviews/" + encodeURIComponent(payload.review.uid) + "/images", { method: "POST", body: formData });
+        }).then(function () {
           form.reset();
           return loadReviews(slug);
         }).catch(function (error) { showMessage("reviewNotice", humanError(error), true); });
@@ -735,16 +774,28 @@
     }
     api("/apps/" + encodeURIComponent(slug) + "/reviews").then(function (payload) {
       var reviews = payload.reviews || [];
-      target.innerHTML = reviews.length ? '<ul class="setting-list">' + reviews.map(function (review) {
-        return '<li><span><strong>' + escapeHTML(review.author || "User") + '</strong> ' + ratingDots(review.rating) + '<br>' + escapeHTML(review.title || "") +
-          '<br><small>' + escapeHTML(review.body || "") + '</small></span><span>' + escapeHTML(review.likes || 0) + ' likes' +
-          (state.currentUser ? ' <button class="metal-button small-action" data-like-review="' + escapeHTML(review.id) + '" type="button">Like</button>' : "") + '</span></li>';
+      target.innerHTML = reviews.length ? '<ul class="setting-list review-list">' + reviews.map(function (review) {
+        var context = reviewContextLine(review);
+        var avatar = review.avatar_url ?
+          '<img class="review-avatar" src="' + escapeHTML(review.avatar_url) + '" alt="">' :
+          '<span class="review-avatar review-avatar-fallback">' + escapeHTML((review.author || "U").slice(0, 1).toUpperCase()) + '</span>';
+        var images = (review.images || []).length ? '<div class="review-image-strip">' + (review.images || []).map(function (image) {
+          return '<a href="' + escapeHTML(image.url) + '" target="_blank" rel="noopener"><img class="review-upload-image" src="' +
+            escapeHTML(image.url) + '" alt="Review image" loading="lazy"></a>';
+        }).join("") + '</div>' : "";
+        return '<li><span class="review-main">' + avatar + '<span><strong>' + escapeHTML(review.author || "User") + '</strong> ' + ratingDots(review.rating) +
+          (context ? '<br><small class="review-context">' + escapeHTML(context) + '</small>' : "") +
+          '<br>' + escapeHTML(review.title || "") + '<br><small>' + escapeHTML(review.body || "") + '</small>' + images + '</span></span><span>' +
+          escapeHTML(review.likes || 0) + ' likes' +
+          (state.currentUser ? ' <button class="metal-button small-action" data-like-review="' + escapeHTML(review.uid || "") + '" type="button">Like</button>' : "") +
+          '</span></li>';
       }).join("") + "</ul>" : '<div class="empty-state compact">No reviews</div>';
       target.querySelectorAll("[data-like-review]").forEach(function (button) {
         button.addEventListener("click", function () {
           jsonRequest("POST", "/reviews/" + encodeURIComponent(button.getAttribute("data-like-review")) + "/like", {}).then(function () { loadReviews(slug); });
         });
       });
+      bindImageFallbacks(target);
     }).catch(function () { target.innerHTML = '<div class="empty-state compact">Unable to load reviews</div>'; });
   }
 
@@ -828,9 +879,10 @@
       '<section class="bento-card profile-edit-card"><h2>Profile details</h2><p class="panel-help">Public nickname and optional avatar used on reviews and account pages.</p>' +
       '<form id="profileForm"><div class="compact-field-grid"><div class="form-row field-medium"><label>Nickname</label><input name="nickname" type="text" maxlength="80" ' +
       'placeholder="Steve Jobs" value="' + escapeHTML(user.nickname || "") + '"><small>Shown next to your reviews and submissions.</small></div>' +
-      '<div class="form-row field-wide"><label>Avatar URL</label><input name="avatar_url" type="url" placeholder="https://example.com/avatar.png" value="' +
-      escapeHTML(user.avatar_url || "") + '"><small>HTTPS image URL. Leave empty to use your initials.</small></div></div>' +
-      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button></div></form></section>' +
+      '<div class="form-row field-wide"><label>Avatar image</label><input name="avatar_file" type="file" accept="image/jpeg,image/png,image/gif">' +
+      '<small>JPEG/PNG/GIF, up to 2 MB and 2048×2048. Stored at up to 512×512 and compressed to at most 1 MB.</small></div></div>' +
+      '<div id="profileNotice" class="form-message"></div><div class="form-actions"><button class="blue-button" type="submit">Save profile</button>' +
+      (user.avatar_url ? '<button class="metal-button" id="deleteAvatarButton" type="button">Remove avatar</button>' : "") + '</div></form></section>' +
       '<section class="bento-card profile-status-card"><h2>Account</h2><div class="account-metric-grid">' +
       '<div class="account-metric"><span>Email</span><strong>' + (user.email_verified ? "Verified" : "Not verified") + '</strong></div>' +
       '<div class="account-metric"><span>Two-factor authentication</span><strong>' + (user.two_factor_enabled ? "Enabled" : "Off") + '</strong></div></div>' +
@@ -1068,12 +1120,40 @@
     if (profile) {
       profile.addEventListener("submit", function (event) {
         event.preventDefault();
-        jsonRequest("PATCH", "/me", formJSON(profile)).then(function (payload) {
+        var avatarInput = profile.querySelector('[name="avatar_file"]');
+        var avatarFile = avatarInput && avatarInput.files ? avatarInput.files[0] : null;
+        if (avatarFile && avatarFile.size > 2 * 1024 * 1024) {
+          showMessage("profileNotice", "Avatar must be 2 MB or smaller.", true);
+          return;
+        }
+        jsonRequest("PATCH", "/me", {
+          nickname: profile.querySelector('[name="nickname"]').value || "",
+          avatar_url: ""
+        }).then(function (payload) {
+          state.currentUser = payload.user;
+          if (!avatarFile) { return payload; }
+          var formData = new FormData();
+          formData.append("file", avatarFile, avatarFile.name);
+          return api("/me/avatar", { method: "POST", body: formData });
+        }).then(function () {
+          return api("/me");
+        }).then(function (payload) {
           state.currentUser = payload.user;
           showMessage("profileNotice", "Saved", false);
           renderSidebar();
+          renderAccount("profile");
         }).catch(function (error) { showMessage("profileNotice", humanError(error), true); });
       });
+      var deleteAvatarButton = document.getElementById("deleteAvatarButton");
+      if (deleteAvatarButton) {
+        deleteAvatarButton.addEventListener("click", function () {
+          api("/me/avatar", { method: "DELETE" }).then(function () { return api("/me"); }).then(function (payload) {
+            state.currentUser = payload.user;
+            renderSidebar();
+            renderAccount("profile");
+          }).catch(function (error) { showMessage("profileNotice", humanError(error), true); });
+        });
+      }
     }
     if (setup2FA) {
       setup2FA.addEventListener("submit", function (event) {
@@ -1293,6 +1373,12 @@
       '<div class="form-row field-date"><label>Release date</label><input name="release_date" type="date"><small>Optional original release date.</small></div>' +
       '<label class="switch-card"><input name="is_recommended" type="checkbox" value="true" checked><span><strong>Recommended build</strong><small>Prefer this release when it matches the selected Mac.</small></span></label>' +
       '<div class="form-row field-full"><label>Changelog</label><textarea name="changelog" placeholder="What changed in this release?"></textarea></div></div></section>' +
+
+      '<section class="bento-card upload-media-card"><h2>Images</h2><p class="panel-help">Optional catalog media. All files are validated and recompressed by LegacyStore before storage.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-wide"><label>Application icon</label><input name="icon_file" type="file" accept="image/jpeg,image/png,image/gif,image/svg+xml,.svg">' +
+      '<small>Optional override for the detected icon. Raster/SVG source up to 2 MB and 2048×2048; stored at up to 512×512 and 1 MB. SVG is allowed only here.</small></div>' +
+      '<div class="form-row field-full"><label>Screenshots</label><input name="screenshots" type="file" accept="image/jpeg,image/png,image/gif" multiple>' +
+      '<small>Up to 3 images, 2 MB each and no larger than 2048×2048. They are recompressed to at most 1 MB each.</small></div></div></section>' +
 
       '<section class="bento-card upload-compat-card"><h2>Compatibility</h2><p class="panel-help">Use exact patch versions when the application requires them, for example 10.6.8.</p>' +
       '<div class="compact-field-grid"><div class="form-row field-os"><label>Minimum OS X <span class="required-dot">*</span></label><input name="min_os" type="text" value="10.4" placeholder="10.6.8" required>' +
@@ -1528,20 +1614,93 @@
     return formData;
   }
 
+  function dataURLToBlob(dataURL) {
+    var parts = String(dataURL || "").split(",");
+    if (parts.length !== 2) { throw new Error("invalid_image_data"); }
+    var mimeMatch = parts[0].match(/^data:([^;]+);base64$/i);
+    if (!mimeMatch) { throw new Error("invalid_image_data"); }
+    var binary = atob(parts[1]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) { bytes[i] = binary.charCodeAt(i); }
+    return new Blob([bytes], { type: mimeMatch[1] });
+  }
+
   function maybeSaveDetectedIcon(appId, versionId, form) {
     var inspection = state.uploadContext.inspection || {};
     var metadata = inspection.metadata || {};
     if (!metadata.icon_data_url) { return Promise.resolve(); }
-    return jsonRequest("POST", "/admin/apps/" + encodeURIComponent(appId) + "/icons", {
-      app_version_id: Number(versionId || 0),
-      image_url: metadata.icon_data_url,
-      min_os: form.querySelector('[name="min_os"]').value || "",
-      max_os: form.querySelector('[name="max_supported_os"]').value || "",
-      width: Number(metadata.icon_width || 0),
-      height: Number(metadata.icon_height || 0)
+    var blob;
+    try {
+      blob = dataURLToBlob(metadata.icon_data_url);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    var formData = new FormData();
+    formData.append("file", blob, "detected-icon.png");
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value || "");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
+      method: "POST",
+      body: formData
     }).catch(function (error) {
       showToast("Иконка распознана, но сохранить её не удалось: " + humanError(error), "error");
     });
+  }
+
+  function uploadIconFile(appId, versionId, form, file) {
+    var formData = new FormData();
+    formData.append("file", file, file.name || "icon");
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
+      form.querySelector('[name="max_tested_os"]').value || "15");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
+      method: "POST",
+      body: formData
+    });
+  }
+
+  function maybeSaveUploadIcon(appId, versionId, form) {
+    var input = form.querySelector('[name="icon_file"]');
+    var file = input && input.files ? input.files[0] : null;
+    if (file) {
+      return uploadIconFile(appId, versionId, form, file);
+    }
+    return maybeSaveDetectedIcon(appId, versionId, form);
+  }
+
+  function maybeSaveUploadScreenshots(appId, versionId, form) {
+    var input = form.querySelector('[name="screenshots"]');
+    var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+    if (!files.length) { return Promise.resolve(); }
+    var formData = new FormData();
+    files.forEach(function (file) { formData.append("images", file, file.name); });
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
+      form.querySelector('[name="max_tested_os"]').value || "15");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/screenshots/upload", {
+      method: "POST",
+      body: formData
+    });
+  }
+
+  function validateUploadImages(form) {
+    var iconInput = form.querySelector('[name="icon_file"]');
+    var icon = iconInput && iconInput.files ? iconInput.files[0] : null;
+    if (icon && icon.size > 2 * 1024 * 1024) {
+      return "Application icon must be 2 MB or smaller.";
+    }
+    var screenshotsInput = form.querySelector('[name="screenshots"]');
+    var screenshots = screenshotsInput && screenshotsInput.files ? Array.prototype.slice.call(screenshotsInput.files) : [];
+    if (screenshots.length > 3) {
+      return "You can upload at most 3 screenshots for a release.";
+    }
+    if (screenshots.some(function (file) { return file.size > 2 * 1024 * 1024; })) {
+      return "Each screenshot must be 2 MB or smaller.";
+    }
+    return "";
   }
 
   function bindUploadForms() {
@@ -1566,6 +1725,13 @@
       var file = state.uploadContext.file;
       if (!file) {
         showToast("Выберите DMG, PKG или ZIP файл. Raw .app можно использовать для чтения метаданных, но не как браузерный artifact.", "error");
+        return;
+      }
+
+      var imageValidationError = validateUploadImages(form);
+      if (imageValidationError) {
+        showToast(imageValidationError, "error");
+        showMessage("uploadWorkflowNotice", imageValidationError, true);
         return;
       }
 
@@ -1613,9 +1779,11 @@
           body: buildArtifactFormData(form, file)
         });
       }).then(function (payload) {
-        progressBar.style.width = "86%";
-        showMessage("uploadWorkflowNotice", "Saving detected icon...", false);
-        return maybeSaveDetectedIcon(state.uploadContext.appId, state.uploadContext.versionId, form).then(function () { return payload; });
+        progressBar.style.width = "82%";
+        showMessage("uploadWorkflowNotice", "Processing catalog images...", false);
+        return maybeSaveUploadIcon(state.uploadContext.appId, state.uploadContext.versionId, form)
+          .then(function () { return maybeSaveUploadScreenshots(state.uploadContext.appId, state.uploadContext.versionId, form); })
+          .then(function () { return payload; });
       }).then(function (payload) {
         progressBar.style.width = "100%";
         showMessage("uploadWorkflowNotice", "Uploaded to quarantine. SHA-256: " + payload.upload.sha256 + ". Artifact ID: " + payload.artifact.id, false);

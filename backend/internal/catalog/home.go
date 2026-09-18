@@ -58,58 +58,18 @@ func (s *Store) Home(ctx context.Context, target compatibility.Target) (*HomeFee
 	return feed, nil
 }
 
-func (s *Store) RecordDownload(ctx context.Context, artifactID int64) error {
-	result, err := s.db.ExecContext(ctx, `
-		INSERT INTO download_events (artifact_id, app_id)
-		SELECT ar.id, v.app_id
-		FROM artifacts ar
-		JOIN app_versions v ON v.id = ar.app_version_id
-		WHERE ar.id = $1
-		  AND ar.moderation_status = 'approved'
-	`, artifactID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 func appOrderBy(sortMode string) string {
 	switch sortMode {
 	case "popular":
-		// Popularity is engagement-first: review volume, rating, then downloads.
-		return `(
-			SELECT COUNT(*) FROM reviews r
-			WHERE r.app_id = a.id AND r.deleted_at IS NULL
-		) DESC,
-		COALESCE((
-			SELECT AVG(rating)::float8 FROM reviews r
-			WHERE r.app_id = a.id AND r.deleted_at IS NULL
-		), 0) DESC,
-		(
-			SELECT COUNT(*) FROM download_events de
-			WHERE de.app_id = a.id
-		) DESC,
-		a.updated_at DESC,
-		a.name`
+		return "COALESCE(stats.popularity_score, 0) DESC, COALESCE(stats.positive_review_count, 0) DESC, COALESCE(stats.download_count, 0) DESC, a.updated_at DESC, a.name"
 	case "downloads":
-		return `(
-			SELECT COUNT(*) FROM download_events de
-			WHERE de.app_id = a.id
-		) DESC,
-		a.updated_at DESC,
-		a.name`
+		return "COALESCE(stats.download_count, 0) DESC, a.updated_at DESC, a.name"
 	case "downloads-week":
 		return `(
 			SELECT COUNT(*) FROM download_events de
 			WHERE de.app_id = a.id
-			  AND de.created_at >= now() - interval '7 days'
+			  AND de.completed_at IS NOT NULL
+			  AND de.completed_at >= now() - interval '7 days'
 		) DESC,
 		a.updated_at DESC,
 		a.name`
@@ -117,18 +77,13 @@ func appOrderBy(sortMode string) string {
 		return `(
 			SELECT COUNT(*) FROM download_events de
 			WHERE de.app_id = a.id
-			  AND de.created_at >= now() - interval '24 hours'
+			  AND de.completed_at IS NOT NULL
+			  AND de.completed_at >= now() - interval '24 hours'
 		) DESC,
 		a.updated_at DESC,
 		a.name`
 	case "new":
-		return `(
-			SELECT MAX(COALESCE(v.release_date::timestamp, v.created_at))
-			FROM app_versions v
-			WHERE v.app_id = a.id
-		) DESC NULLS LAST,
-		a.created_at DESC,
-		a.name`
+		return "stats.latest_release_at DESC NULLS LAST, a.created_at DESC, a.name"
 	default:
 		return "a.name"
 	}

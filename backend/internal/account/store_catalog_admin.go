@@ -426,12 +426,29 @@ func (s *Store) CreateAdminIcon(ctx context.Context, actor User, item AdminIcon,
 }
 
 func (s *Store) DeleteAdminIcon(ctx context.Context, actor User, iconID int64, ip net.IP, userAgent string) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM icons WHERE id = $1`, iconID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
+	defer tx.Rollback()
+
+	var imageAssetID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `
+		DELETE FROM icons
+		WHERE id = $1
+		RETURNING image_asset_id
+	`, iconID).Scan(&imageAssetID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if imageAssetID.Valid {
+		_, _ = tx.ExecContext(ctx, `DELETE FROM image_assets WHERE id = $1 AND kind = 'icon'`, imageAssetID.Int64)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return s.audit(ctx, actor.ID, "admin.icons.delete", "icon", intString(iconID), ip, userAgent)
 }
@@ -490,12 +507,29 @@ func (s *Store) UpdateAdminScreenshot(ctx context.Context, actor User, screensho
 }
 
 func (s *Store) DeleteAdminScreenshot(ctx context.Context, actor User, screenshotID int64, ip net.IP, userAgent string) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM screenshots WHERE id = $1`, screenshotID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
+	defer tx.Rollback()
+
+	var imageAssetID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `
+		DELETE FROM screenshots
+		WHERE id = $1
+		RETURNING image_asset_id
+	`, screenshotID).Scan(&imageAssetID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if imageAssetID.Valid {
+		_, _ = tx.ExecContext(ctx, `DELETE FROM image_assets WHERE id = $1 AND kind = 'screenshot'`, imageAssetID.Int64)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return s.audit(ctx, actor.ID, "admin.screenshots.delete", "screenshot", intString(screenshotID), ip, userAgent)
 }

@@ -10,6 +10,7 @@ run_public_tests() {
   test_catalog_filters
   test_search
   test_app_detail_versions
+  test_unique_app_views
   test_compatibility
   test_download_metadata
   test_not_found
@@ -146,6 +147,31 @@ test_app_detail_versions() {
   api_request GET '/api/v1/apps/pixelmator/versions?os=10.9.5&arch=x86_64' 0
   if ! status_is 200 || ! jq_ok '.versions | type == "array" and length > 0 and (.[0].artifacts | type == "array")'; then
     err "$NAME" Versions 'versions array with artifacts' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  ok "$NAME"
+}
+
+test_unique_app_views() {
+  NAME='UniqueAppViews'
+
+  api_request POST '/api/v1/apps/pixelmator/view' 0 '' '{}' 'curl/8.0'
+  if ! status_is 200 || ! jq_ok '.counted == false and .status == "ignored"'; then
+    err "$NAME" BotIgnored 'bot-like user agent ignored' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  WEB_AGENT='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 Safari/537.36'
+  api_request POST '/api/v1/apps/pixelmator/view' 0 '' '{}' "$WEB_AGENT"
+  if ! status_is 200; then
+    err "$NAME" FirstView 200 "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  api_request POST '/api/v1/apps/pixelmator/view' 0 '' '{}' "$WEB_AGENT"
+
+  api_request GET '/api/v1/apps/pixelmator?os=10.9.5&arch=x86_64' 0
+  if ! status_is 200 || ! jq_ok '.views == 1'; then
+    err "$NAME" AnonymousUnique 'one unique page view per IP and app' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
   ok "$NAME"

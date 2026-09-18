@@ -40,7 +40,7 @@ func NewLocal(root string, maxUploadBytes int64) (*Local, error) {
 	if maxUploadBytes <= 0 {
 		maxUploadBytes = 8 << 30
 	}
-	for _, dir := range []string{"quarantine", "objects"} {
+	for _, dir := range []string{"quarantine", "objects", "images"} {
 		if err := os.MkdirAll(filepath.Join(absolute, dir), 0750); err != nil {
 			return nil, err
 		}
@@ -93,6 +93,64 @@ func (s *Local) SaveQuarantine(reader io.Reader, originalName string) (*SavedFil
 		SHA256:       hex.EncodeToString(hash.Sum(nil)),
 		SizeBytes:    written,
 	}, nil
+}
+
+func (s *Local) SaveImage(data []byte, extension, sha256Hex string) (*SavedFile, error) {
+	if len(data) == 0 {
+		return nil, errors.New("empty image")
+	}
+	extension = strings.ToLower(strings.TrimSpace(extension))
+	if extension != ".jpg" && extension != ".png" && extension != ".svg" {
+		return nil, ErrInvalidPath
+	}
+	sha256Hex = strings.ToLower(strings.TrimSpace(sha256Hex))
+	if len(sha256Hex) != 64 {
+		return nil, errors.New("invalid sha256")
+	}
+	for _, r := range sha256Hex {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return nil, errors.New("invalid sha256")
+		}
+	}
+
+	relative := filepath.ToSlash(filepath.Join("images", sha256Hex[:2], sha256Hex+extension))
+	absolute, err := s.Resolve(relative)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(absolute), 0750); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(absolute, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
+	if errors.Is(err, os.ErrExist) {
+		info, statErr := os.Stat(absolute)
+		if statErr != nil {
+			return nil, statErr
+		}
+		return &SavedFile{RelativePath: relative, SHA256: sha256Hex, SizeBytes: info.Size()}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keep := false
+	defer func() {
+		_ = file.Close()
+		if !keep {
+			_ = os.Remove(absolute)
+		}
+	}()
+	written, err := file.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	if written != len(data) {
+		return nil, io.ErrShortWrite
+	}
+	if err := file.Sync(); err != nil {
+		return nil, err
+	}
+	keep = true
+	return &SavedFile{RelativePath: relative, SHA256: sha256Hex, SizeBytes: int64(written)}, nil
 }
 
 func (s *Local) Remove(relative string) error {

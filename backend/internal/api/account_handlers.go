@@ -32,9 +32,14 @@ type profilePayload struct {
 }
 
 type reviewPayload struct {
-	Rating int    `json:"rating"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
+	Rating        int    `json:"rating"`
+	Title         string `json:"title"`
+	Body          string `json:"body"`
+	AppVersion    string `json:"app_version"`
+	OSVersion     string `json:"os_version"`
+	OSArch        string `json:"os_arch"`
+	DeviceModel   string `json:"device_model"`
+	ClientVersion string `json:"client_version"`
 }
 
 type adminUserPayload struct {
@@ -326,7 +331,7 @@ func (r *Router) revokeDevice(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) createReview(w http.ResponseWriter, req *http.Request) {
-	user, _, ok := r.requireAuth(w, req)
+	user, session, ok := r.requireAuth(w, req)
 	if !ok {
 		return
 	}
@@ -334,7 +339,17 @@ func (r *Router) createReview(w http.ResponseWriter, req *http.Request) {
 	if !decodeJSON(w, req, &payload) {
 		return
 	}
-	review, err := r.users.CreateReview(req.Context(), *user, req.PathValue("slug"), payload.Rating, payload.Title, payload.Body, clientIP(req), req.UserAgent())
+	review, err := r.users.CreateReview(
+		req.Context(),
+		*user,
+		req.PathValue("slug"),
+		payload.Rating,
+		payload.Title,
+		payload.Body,
+		reviewContextFromRequest(req, payload, session),
+		clientIP(req),
+		req.UserAgent(),
+	)
 	if err != nil {
 		writeAccountError(w, err)
 		return
@@ -343,11 +358,7 @@ func (r *Router) createReview(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) updateReview(w http.ResponseWriter, req *http.Request) {
-	user, _, ok := r.requireAuth(w, req)
-	if !ok {
-		return
-	}
-	id, ok := pathID(w, req, "id")
+	user, session, ok := r.requireAuth(w, req)
 	if !ok {
 		return
 	}
@@ -355,7 +366,17 @@ func (r *Router) updateReview(w http.ResponseWriter, req *http.Request) {
 	if !decodeJSON(w, req, &payload) {
 		return
 	}
-	review, err := r.users.UpdateReview(req.Context(), *user, id, payload.Rating, payload.Title, payload.Body, clientIP(req), req.UserAgent())
+	review, err := r.users.UpdateReview(
+		req.Context(),
+		*user,
+		req.PathValue("id"),
+		payload.Rating,
+		payload.Title,
+		payload.Body,
+		reviewContextFromRequest(req, payload, session),
+		clientIP(req),
+		req.UserAgent(),
+	)
 	if err != nil {
 		writeAccountError(w, err)
 		return
@@ -368,11 +389,7 @@ func (r *Router) deleteReview(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, req, "id")
-	if !ok {
-		return
-	}
-	if err := r.users.DeleteReview(req.Context(), *user, id, clientIP(req), req.UserAgent()); err != nil {
+	if err := r.users.DeleteReview(req.Context(), *user, req.PathValue("id"), clientIP(req), req.UserAgent()); err != nil {
 		writeAccountError(w, err)
 		return
 	}
@@ -384,11 +401,7 @@ func (r *Router) likeReview(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, req, "id")
-	if !ok {
-		return
-	}
-	if err := r.users.LikeReview(req.Context(), *user, id); err != nil {
+	if err := r.users.LikeReview(req.Context(), *user, req.PathValue("id")); err != nil {
 		writeAccountError(w, err)
 		return
 	}
@@ -400,11 +413,7 @@ func (r *Router) unlikeReview(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, req, "id")
-	if !ok {
-		return
-	}
-	if err := r.users.UnlikeReview(req.Context(), user.ID, id); err != nil {
+	if err := r.users.UnlikeReview(req.Context(), user.ID, req.PathValue("id")); err != nil {
 		writeAccountError(w, err)
 		return
 	}
@@ -416,15 +425,11 @@ func (r *Router) createReviewReply(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, req, "id")
-	if !ok {
-		return
-	}
 	var payload reviewPayload
 	if !decodeJSON(w, req, &payload) {
 		return
 	}
-	reply, err := r.users.CreateReviewReply(req.Context(), *user, id, payload.Body, clientIP(req), req.UserAgent())
+	reply, err := r.users.CreateReviewReply(req.Context(), *user, req.PathValue("id"), payload.Body, clientIP(req), req.UserAgent())
 	if err != nil {
 		writeAccountError(w, err)
 		return
@@ -469,6 +474,9 @@ func requiredLegacyScope(req *http.Request) string {
 			return "reviews:like"
 		}
 		if strings.HasSuffix(path, "/replies") && method == http.MethodPost {
+			return "reviews:write"
+		}
+		if strings.Contains(path, "/images") && (method == http.MethodPost || method == http.MethodDelete) {
 			return "reviews:write"
 		}
 		if method == http.MethodPatch || method == http.MethodDelete {

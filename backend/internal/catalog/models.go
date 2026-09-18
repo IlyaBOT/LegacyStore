@@ -17,7 +17,10 @@ type AppSummary struct {
 	HeroImage          string               `json:"hero_image,omitempty"`
 	Rating             float64              `json:"rating"`
 	RatingCount        int                  `json:"rating_count"`
+	PositiveReviews    int64                `json:"positive_reviews"`
 	Downloads          int64                `json:"downloads"`
+	Views              int64                `json:"views"`
+	PopularityScore    float64              `json:"popularity_score"`
 	RecommendedVersion string               `json:"recommended_version,omitempty"`
 	ArchBadges         []string             `json:"arch_badges"`
 	Compatibility      compatibility.Result `json:"compatibility"`
@@ -49,6 +52,8 @@ type AppDetail struct {
 	Screenshots         []Screenshot         `json:"screenshots,omitempty"`
 	Rating              float64              `json:"rating"`
 	RatingCount         int                  `json:"rating_count"`
+	Downloads           int64                `json:"downloads"`
+	Views               int64                `json:"views"`
 	RecommendedArtifact *ArtifactResponse    `json:"recommended_artifact,omitempty"`
 	Versions            []VersionResponse    `json:"versions"`
 	Compatibility       compatibility.Result `json:"compatibility"`
@@ -59,6 +64,7 @@ type VersionResponse struct {
 	ReleaseDate   string             `json:"release_date,omitempty"`
 	Changelog     string             `json:"changelog,omitempty"`
 	IsRecommended bool               `json:"is_recommended"`
+	Downloads     int64              `json:"downloads"`
 	Artifacts     []ArtifactResponse `json:"artifacts"`
 }
 
@@ -105,15 +111,24 @@ type Mirror struct {
 }
 
 type Review struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id,omitempty"`
-	Author    string `json:"author,omitempty"`
-	Rating    int    `json:"rating"`
-	Title     string `json:"title,omitempty"`
-	Body      string `json:"body,omitempty"`
-	Likes     int    `json:"likes"`
-	Replies   int    `json:"replies"`
-	CreatedAt string `json:"created_at,omitempty"`
+	UID           string        `json:"uid"`
+	UserID        int64         `json:"user_id,omitempty"`
+	Author        string        `json:"author,omitempty"`
+	AvatarURL     string        `json:"avatar_url,omitempty"`
+	Rating        int           `json:"rating"`
+	Title         string        `json:"title,omitempty"`
+	Body          string        `json:"body,omitempty"`
+	AppVersion    string        `json:"app_version,omitempty"`
+	OSVersion     string        `json:"os_version,omitempty"`
+	OSArch        string        `json:"os_arch,omitempty"`
+	DeviceModel   string        `json:"device_model,omitempty"`
+	ClientVersion string        `json:"client_version,omitempty"`
+	Source        string        `json:"source,omitempty"`
+	Images        []ReviewImage `json:"images,omitempty"`
+	Likes         int           `json:"likes"`
+	Replies       int           `json:"replies"`
+	CreatedAt     string        `json:"created_at,omitempty"`
+	UpdatedAt     string        `json:"updated_at,omitempty"`
 }
 
 type Filters struct {
