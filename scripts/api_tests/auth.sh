@@ -155,7 +155,7 @@ test_legacy_scopes_and_revocation() {
   fi
 
   api_request POST '/api/v1/apps/vlc/reviews' 1 "$LEGACY_SESSION" '{"rating":4,"title":"Legacy API","body":"Scoped legacy review."}'
-  if ! status_is 200 || ! jq_ok '.review.id'; then
+  if ! status_is 200 || ! jq_ok '.review.uid and (.review.uid | length >= 16 and length <= 32)'; then
     err "$NAME" ReviewScope 'reviews:write permits review creation' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
