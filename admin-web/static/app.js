@@ -1648,6 +1648,61 @@
     });
   }
 
+  function uploadIconFile(appId, versionId, form, file) {
+    var formData = new FormData();
+    formData.append("file", file, file.name || "icon");
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
+      form.querySelector('[name="max_tested_os"]').value || "15");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
+      method: "POST",
+      body: formData
+    });
+  }
+
+  function maybeSaveUploadIcon(appId, versionId, form) {
+    var input = form.querySelector('[name="icon_file"]');
+    var file = input && input.files ? input.files[0] : null;
+    if (file) {
+      return uploadIconFile(appId, versionId, form, file);
+    }
+    return maybeSaveDetectedIcon(appId, versionId, form);
+  }
+
+  function maybeSaveUploadScreenshots(appId, versionId, form) {
+    var input = form.querySelector('[name="screenshots"]');
+    var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+    if (!files.length) { return Promise.resolve(); }
+    var formData = new FormData();
+    files.forEach(function (file) { formData.append("images", file, file.name); });
+    formData.append("app_version_id", String(Number(versionId || 0)));
+    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
+    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
+      form.querySelector('[name="max_tested_os"]').value || "15");
+    return api("/admin/apps/" + encodeURIComponent(appId) + "/screenshots/upload", {
+      method: "POST",
+      body: formData
+    });
+  }
+
+  function validateUploadImages(form) {
+    var iconInput = form.querySelector('[name="icon_file"]');
+    var icon = iconInput && iconInput.files ? iconInput.files[0] : null;
+    if (icon && icon.size > 2 * 1024 * 1024) {
+      return "Application icon must be 2 MB or smaller.";
+    }
+    var screenshotsInput = form.querySelector('[name="screenshots"]');
+    var screenshots = screenshotsInput && screenshotsInput.files ? Array.prototype.slice.call(screenshotsInput.files) : [];
+    if (screenshots.length > 3) {
+      return "You can upload at most 3 screenshots for a release.";
+    }
+    if (screenshots.some(function (file) { return file.size > 2 * 1024 * 1024; })) {
+      return "Each screenshot must be 2 MB or smaller.";
+    }
+    return "";
+  }
+
   function bindUploadForms() {
     var form = document.getElementById("uploadSubmissionForm");
     if (!form) { return; }
@@ -1670,6 +1725,13 @@
       var file = state.uploadContext.file;
       if (!file) {
         showToast("Выберите DMG, PKG или ZIP файл. Raw .app можно использовать для чтения метаданных, но не как браузерный artifact.", "error");
+        return;
+      }
+
+      var imageValidationError = validateUploadImages(form);
+      if (imageValidationError) {
+        showToast(imageValidationError, "error");
+        showMessage("uploadWorkflowNotice", imageValidationError, true);
         return;
       }
 
@@ -1717,9 +1779,11 @@
           body: buildArtifactFormData(form, file)
         });
       }).then(function (payload) {
-        progressBar.style.width = "86%";
-        showMessage("uploadWorkflowNotice", "Saving detected icon...", false);
-        return maybeSaveDetectedIcon(state.uploadContext.appId, state.uploadContext.versionId, form).then(function () { return payload; });
+        progressBar.style.width = "82%";
+        showMessage("uploadWorkflowNotice", "Processing catalog images...", false);
+        return maybeSaveUploadIcon(state.uploadContext.appId, state.uploadContext.versionId, form)
+          .then(function () { return maybeSaveUploadScreenshots(state.uploadContext.appId, state.uploadContext.versionId, form); })
+          .then(function () { return payload; });
       }).then(function (payload) {
         progressBar.style.width = "100%";
         showMessage("uploadWorkflowNotice", "Uploaded to quarantine. SHA-256: " + payload.upload.sha256 + ". Artifact ID: " + payload.artifact.id, false);
