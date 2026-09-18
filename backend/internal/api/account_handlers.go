@@ -476,6 +476,9 @@ func requiredLegacyScope(req *http.Request) string {
 		if strings.HasSuffix(path, "/replies") && method == http.MethodPost {
 			return "reviews:write"
 		}
+		if strings.Contains(path, "/images") && (method == http.MethodPost || method == http.MethodDelete) {
+			return "reviews:write"
+		}
 		if method == http.MethodPatch || method == http.MethodDelete {
 			return "reviews:write"
 		}
