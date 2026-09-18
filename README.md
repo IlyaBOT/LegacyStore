@@ -181,6 +181,16 @@ make test-api
 
 Популярность рассчитывается на сервере как комбинация Wilson lower bound для доли положительных отзывов (4–5 звёзд) и логарифмически нормализованного количества завершённых уникальных загрузок. Текущий вес: 65% отзывы, 35% загрузки.
 
+## Изображения
+
+Все новые пользовательские изображения проходят один backend pipeline: сервер сначала ограничивает исходный upload 2 MiB, читает размеры до полного декодирования и отклоняет raster/SVG canvas больше 2048×2048. Raster-файлы полностью декодируются и заново кодируются, поэтому EXIF и прочие исходные metadata не сохраняются.
+
+Аватары и иконки уменьшаются до 512×512 с сохранением пропорций. Review images и screenshots допускаются до 2048×2048. Целевой размер после обработки — не более 1 MiB; JPEG кодируется с постепенным снижением quality и при необходимости с дополнительным уменьшением геометрии. PNG с alpha используется только там, где прозрачность имеет смысл, и при превышении цели также уменьшается по размеру. Review images и screenshots нормализуются в JPEG. На один review допускается до 3 изображений; для screenshots действует тот же лимит в пределах app version.
+
+SVG разрешён только для app icons. SVG проходит XML parsing/sanitization: запрещены script/foreignObject/embed/iframe/object/image/style, event-handler attributes и внешние href. Intrinsic canvas больше 2048×2048 отклоняется, а отображаемый размер нормализуется до 512×512.
+
+Processed bytes не хранятся в PostgreSQL и не кодируются в Base64. Файлы лежат в content-addressed local storage по SHA-256, например `images/ab/<sha256>.jpg`; PostgreSQL хранит только metadata, owner/reference и opaque public UID. Это позволяет позже заменить local storage на S3/CDN без раздувания базы. Public image endpoint использует immutable caching, ETag и отдельный CSP для SVG.
+
 ## Безопасность
 
 Legacy-клиент не должен получать или отправлять основной пароль аккаунта. Допускаются только app-specific legacy passwords и только через рабочий HTTPS/TLS. Если TLS validation fails, authentication must be blocked.
@@ -189,4 +199,4 @@ Uploads разрешены только через HTTPS web UI. Legacy-клие
 
 ## Статус проекта
 
-Текущий статус: backend public catalog MVP и static web client. Реализованы структура проекта, Docker Compose, Go backend, PostgreSQL migrations, compatibility engine, seed data, curl/jq API tests и web UI для каталога, категорий, поиска, app detail, auth/account flows, reviews, ratings, legacy passwords, admin/moderation screens. Objective-C client skeleton, uploads, OAuth, P2P и CDN еще не реализованы.
+Текущий статус: backend public catalog MVP и static web client. Реализованы структура проекта, Docker Compose, Go backend, PostgreSQL migrations, compatibility engine, seed data, curl/jq API tests и web UI для каталога, категорий, поиска, app detail, auth/account flows, reviews, ratings, legacy passwords, admin/moderation screens. Objective-C client skeleton, OAuth, P2P и CDN еще не реализованы. Software/image uploads уже имеют backend pipeline и local storage.
