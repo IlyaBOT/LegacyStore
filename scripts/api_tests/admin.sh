@@ -100,7 +100,7 @@ SVG
     make_test_png "$SCREEN4" 1024 768
 
     image_upload_request "/api/v1/admin/apps/$APP_ID/screenshots/upload" "$ADMIN_TOKEN"       -F "images=@$SCREEN1;type=image/png"       -F "images=@$SCREEN2;type=image/png"       -F "images=@$SCREEN3;type=image/png"       -F "app_version_id=$VERSION_ID"       -F 'min_os=10.4'       -F 'max_os=10.15'
-    if ! status_is 201 || ! jq_ok '.screenshots | length == 3 and (.images | length == 3) and (.images | all(.mime_type == "image/jpeg" and .size_bytes <= 1048576))'; then
+    if ! status_is 201 || ! jq_ok '(.screenshots | length == 3) and (.images | length == 3) and (.images | all(.mime_type == "image/jpeg" and .size_bytes <= 1048576))'; then
       err "$NAME" Screenshots 'three compressed screenshots' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
       return
     fi
