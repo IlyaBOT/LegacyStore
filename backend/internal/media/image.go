@@ -166,7 +166,7 @@ func looksLikeSVG(raw []byte) bool {
 
 func encodeJPEGToTarget(img image.Image) ([]byte, image.Image) {
 	current := img
-	qualities := []int{90, 84, 78, 72, 66, 60, 54}
+	qualities := []int{95, 90, 86, 82, 78, 72, 66, 60, 54}
 	for {
 		for _, quality := range qualities {
 			var out bytes.Buffer
