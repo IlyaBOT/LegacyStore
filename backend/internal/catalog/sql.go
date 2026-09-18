@@ -7,13 +7,13 @@ import (
 )
 
 type appRow struct {
-	ID          int64
-	Slug        string
-	Name        string
-	Summary     string
-	Category    string
-	Icon        string
-	HeroImage   string
+	ID              int64
+	Slug            string
+	Name            string
+	Summary         string
+	Category        string
+	Icon            string
+	HeroImage       string
 	Rating          float64
 	RatingCount     int
 	PositiveReviews int64
