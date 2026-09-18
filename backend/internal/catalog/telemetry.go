@@ -41,8 +41,8 @@ func (s *Store) RecordCompletedDownload(ctx context.Context, artifactID int64, t
 			FROM artifacts ar
 			JOIN app_versions v ON v.id = ar.app_version_id
 			WHERE ar.id = $1 AND ar.moderation_status = 'approved'
-			ON CONFLICT (artifact_id, user_id)
-			WHERE user_id IS NOT NULL AND completed_at IS NOT NULL
+			ON CONFLICT (app_version_id, user_id)
+			WHERE user_id IS NOT NULL AND app_version_id IS NOT NULL AND completed_at IS NOT NULL
 			DO NOTHING
 		`,
 			artifactID, telemetry.UserID, telemetry.UsernameSnapshot, telemetry.IPAddress,
@@ -62,8 +62,8 @@ func (s *Store) RecordCompletedDownload(ctx context.Context, artifactID int64, t
 			FROM artifacts ar
 			JOIN app_versions v ON v.id = ar.app_version_id
 			WHERE ar.id = $1 AND ar.moderation_status = 'approved'
-			ON CONFLICT (artifact_id, ip_address)
-			WHERE user_id IS NULL AND ip_address IS NOT NULL AND completed_at IS NOT NULL
+			ON CONFLICT (app_version_id, ip_address)
+			WHERE user_id IS NULL AND app_version_id IS NOT NULL AND ip_address IS NOT NULL AND completed_at IS NOT NULL
 			DO NOTHING
 		`,
 			artifactID, telemetry.IPAddress, telemetry.Source, telemetry.UserAgent,
