@@ -98,6 +98,9 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 
 	r.mux.HandleFunc("POST /api/v1/admin/uploads/inspect", r.adminInspectUpload)
 	r.mux.HandleFunc("POST /api/v1/admin/uploads/inspect-app-bundle", r.adminInspectAppBundle)
+	r.mux.HandleFunc("POST /api/v1/contributions/apps/{id}/stage", r.contributionStageUpload)
+	r.mux.HandleFunc("GET /api/v1/contributions/uploads/{uid}", r.contributionStagedUpload)
+	r.mux.HandleFunc("POST /api/v1/contributions/uploads/{uid}/commit", r.contributionCommitUpload)
 
 	r.mux.HandleFunc("GET /api/v1/admin/apps", r.adminApps)
 	r.mux.HandleFunc("POST /api/v1/admin/apps", r.adminCreateApp)
