@@ -123,11 +123,12 @@ type Review struct {
 	OSArch        string `json:"os_arch,omitempty"`
 	DeviceModel   string `json:"device_model,omitempty"`
 	ClientVersion string `json:"client_version,omitempty"`
-	Source        string `json:"source,omitempty"`
-	Likes         int    `json:"likes"`
-	Replies       int    `json:"replies"`
-	CreatedAt     string `json:"created_at,omitempty"`
-	UpdatedAt     string `json:"updated_at,omitempty"`
+	Source        string        `json:"source,omitempty"`
+	Images        []ReviewImage `json:"images,omitempty"`
+	Likes         int           `json:"likes"`
+	Replies       int           `json:"replies"`
+	CreatedAt     string        `json:"created_at,omitempty"`
+	UpdatedAt     string        `json:"updated_at,omitempty"`
 }
 
 type Filters struct {
