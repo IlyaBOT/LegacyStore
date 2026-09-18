@@ -85,7 +85,7 @@ make dev-up
 - web client: `http://localhost:8081`;
 - web client HTTPS: `https://localhost:8443`.
 
-Авторизация работает только через HTTPS endpoint. Для локальной разработки `make dev-up` генерирует self-signed certificate для `localhost` в `admin-web/certs`.
+Авторизация работает только через HTTPS endpoint. Для локальной разработки `make dev-up` генерирует self-signed certificate для `localhost` в `admin-web/certs` и перед запуском backend автоматически применяет все ещё не применённые PostgreSQL migrations.
 
 Остановить окружение:
 
@@ -95,11 +95,13 @@ make dev-down
 
 ## Миграции и тестовые данные
 
-Запустить migrations:
+Запустить migrations вручную:
 
 ```sh
 make migrate
 ```
+
+Обычно это не требуется при `make dev-up`: команда теперь сначала запускает PostgreSQL, применяет pending migrations и только затем поднимает backend/web UI. Если окружение запускается напрямую через `docker compose up`, после `git pull` необходимо выполнить `make migrate` перед запуском backend.
 
 Загрузить seed data:
 
