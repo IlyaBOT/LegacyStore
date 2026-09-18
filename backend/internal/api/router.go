@@ -50,6 +50,7 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("GET /api/v1/search", r.search)
 	r.mux.HandleFunc("GET /api/v1/download/{artifact_id}", r.download)
 	r.mux.HandleFunc("GET /api/v1/files/{artifact_id}", r.localArtifactFile)
+	r.mux.HandleFunc("GET /api/v1/images/{uid}", r.imageAsset)
 
 	r.mux.HandleFunc("POST /api/v1/auth/login", r.loginV2)
 	r.mux.HandleFunc("POST /api/v1/auth/register", r.register)
@@ -67,7 +68,8 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 
 	r.mux.HandleFunc("GET /api/v1/me", r.me)
 	r.mux.HandleFunc("PATCH /api/v1/me", r.updateMe)
-	r.mux.HandleFunc("POST /api/v1/me/avatar", r.updateMe)
+	r.mux.HandleFunc("POST /api/v1/me/avatar", r.uploadAvatar)
+	r.mux.HandleFunc("DELETE /api/v1/me/avatar", r.deleteAvatar)
 	r.mux.HandleFunc("POST /api/v1/me/password", r.changePassword)
 	r.mux.HandleFunc("POST /api/v1/me/email", r.changeEmail)
 	r.mux.HandleFunc("GET /api/v1/me/sessions", r.sessions)
@@ -85,6 +87,8 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("POST /api/v1/reviews/{id}/like", r.likeReview)
 	r.mux.HandleFunc("DELETE /api/v1/reviews/{id}/like", r.unlikeReview)
 	r.mux.HandleFunc("POST /api/v1/reviews/{id}/replies", r.createReviewReply)
+	r.mux.HandleFunc("POST /api/v1/reviews/{id}/images", r.uploadReviewImages)
+	r.mux.HandleFunc("DELETE /api/v1/reviews/{id}/images/{image_uid}", r.deleteReviewImage)
 
 	r.mux.HandleFunc("GET /api/v1/admin/dashboard", r.adminDashboard)
 	r.mux.HandleFunc("GET /api/v1/admin/users", r.adminUsers)
@@ -116,8 +120,10 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("DELETE /api/v1/admin/mirrors/{id}", r.adminDeleteMirror)
 
 	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/icons", r.adminCreateIcon)
+	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/icons/upload", r.adminUploadIcon)
 	r.mux.HandleFunc("DELETE /api/v1/admin/icons/{id}", r.adminDeleteIcon)
 	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/screenshots", r.adminCreateScreenshot)
+	r.mux.HandleFunc("POST /api/v1/admin/apps/{id}/screenshots/upload", r.adminUploadScreenshots)
 	r.mux.HandleFunc("PATCH /api/v1/admin/screenshots/{id}", r.adminUpdateScreenshot)
 	r.mux.HandleFunc("DELETE /api/v1/admin/screenshots/{id}", r.adminDeleteScreenshot)
 
