@@ -15,7 +15,7 @@
     twoFactorSetup: null,
     recoveryCodes: [],
     carouselTimer: null,
-    uploadContext: { appId: "", versionId: "", file: null, inspection: null, iconDataURL: "" }
+    uploadContext: { appId: "", versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" }
   };
 
   var main = document.getElementById("main");
@@ -184,7 +184,7 @@
   }
 
   function canUpload(user) {
-    return hasRole(user, "trusted", "moder", "admin");
+    return hasRole(user, "uploader", "trusted", "moder", "admin");
   }
 
   function canModerate(user) {
@@ -230,7 +230,7 @@
 
     var managementRoutes = [];
     if (canUpload(state.currentUser)) {
-      managementRoutes.push(["uploads", "Uploads", "upload"]);
+      managementRoutes.push(["uploads", "Add Application", "upload"]);
     }
     if (canModerate(state.currentUser)) {
       managementRoutes.push(["moderation", "Moderation Queue", "moderation"]);
@@ -665,7 +665,7 @@
       (version.artifacts || []).forEach(function (artifact) {
         var blocked = artifact.compatibility_status === "blocked";
         rows.push('<tr><td>' + escapeHTML(version.version) + '</td><td>' + escapeHTML(version.release_date || "") + '</td><td>' +
-          escapeHTML((artifact.archs || []).join(", ")) + '</td><td>' + escapeHTML(artifactSupportedSystemsLabel(artifact)) + '</td><td>' +
+          escapeHTML((artifact.architecture_labels || artifact.archs || []).join(", ")) + '</td><td>' + escapeHTML(artifactSupportedSystemsLabel(artifact)) + '</td><td>' +
           escapeHTML(artifact.compatibility_label || artifact.compatibility_status || "") + '</td><td class="actions">' +
           '<button class="metal-button small-action" data-download-artifact="' + escapeHTML(artifact.id) + '" data-download-app="' + escapeHTML(app.name) +
           '" data-download-version="' + escapeHTML(version.version) + '" type="button"' + (blocked ? " disabled" : "") + ">Download</button></td></tr>");
@@ -681,9 +681,11 @@
       var artifact = app.recommended_artifact || {};
       var blocked = isBlockedApp(app);
       main.innerHTML = '<section class="detail-head">' + appIconHTML(app, false) + '<div><h1>' + escapeHTML(app.name) + '</h1><div class="muted">' +
-        escapeHTML(app.developer_name || "") + '</div><p>' + escapeHTML(app.summary || "") + '</p><div class="badge-row">' + badges(artifact.archs || []) +
+        escapeHTML(app.developer_name || "") + '</div><p>' + escapeHTML(app.summary || "") + '</p><div class="badge-row">' + badges(artifact.architecture_labels || artifact.archs || []) +
         compatibilityPill(app.compatibility) + '</div></div><div class="detail-actions"><button class="blue-button" id="downloadButton" type="button"' +
-        (!artifact.id || blocked ? " disabled" : "") + '>Download</button><button class="metal-button" data-route="catalog" type="button">Back to Catalog</button></div></section>' +
+        (!artifact.id || blocked ? " disabled" : "") + '>Download</button>' +
+        (canUpload(state.currentUser) && app.id ? '<button class="metal-button" data-route="upload-version/' + escapeHTML(app.id) + '" type="button">Upload Version</button>' : '') +
+        '<button class="metal-button" data-route="catalog" type="button">Back to Catalog</button></div></section>' +
         '<div class="detail-grid"><section class="detail-copy"><h2>Description</h2><p>' + escapeHTML(app.description || "") + '</p>' + screenshotStrip(app) +
         compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app) + '</section><aside class="side-box"><h2>Information</h2>' +
         infoRow("Category", app.category) + infoRow("Version", artifact.version) + infoRow("Size", formatSize(artifact.size_bytes)) + infoRow("Package", artifact.package_type) +
@@ -1332,382 +1334,41 @@
       .slice(0, 80);
   }
 
-  function renderUploads() {
+  
+function renderUploads() {
     if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
+    state.uploadContext = { appId: "", versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" };
     main.innerHTML =
-      '<div class="view-title upload-page-title"><div><h1>Upload Application</h1>' +
-      '<p class="view-subtitle">Drop a Macintosh package, review detected metadata, then submit it to the catalog.</p></div></div>' +
-      '<form id="uploadSubmissionForm" class="upload-bento">' +
-      '<section class="bento-card upload-package-card">' +
-      '<div class="card-heading-row"><div><h2>Application package</h2><p class="card-kicker">DMG, PKG, ZIP or an app bundle for metadata detection</p></div>' +
-      '<span class="status-chip" id="inspectionStatus">Waiting for file</span></div>' +
-      '<input id="artifactFileInput" name="file" type="file" accept=".dmg,.pkg,.mpkg,.zip,.app" hidden>' +
-      '<button class="artifact-dropzone" id="artifactDropZone" type="button">' +
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>' +
-      '<strong>Drop an application package here</strong><span>or click to choose a file</span>' +
-      '<small>LegacyStore will try to read Info.plist, bundle ID, version, category, minimum OS and application icon.</small></button>' +
-      '<div class="detected-package" id="detectedPackage"><div class="detected-icon" id="detectedIcon"><span>APP</span></div>' +
-      '<div><strong id="detectedFileName">No file selected</strong><p id="detectedFileMeta">Metadata has not been inspected yet.</p></div></div>' +
-      '</section>' +
-
-      '<section class="bento-card upload-app-card"><h2>Application</h2><p class="panel-help">Catalog identity. Detected values are filled automatically and remain editable.</p>' +
+      '<div class="view-title upload-page-title"><div><h1>Create Application</h1>' +
+      '<p class="view-subtitle">Create the catalog page first. Releases and binaries are uploaded separately from the application page.</p></div></div>' +
+      '<form id="createApplicationForm" class="upload-bento create-app-form">' +
+      '<section class="bento-card upload-app-card"><h2>Application</h2><p class="panel-help">These fields describe the application itself and are shared by every release.</p>' +
       '<div class="compact-field-grid upload-app-fields">' +
-      '<div class="form-row field-large"><label>App Name <span class="required-dot">*</span></label><input name="name" type="text" maxlength="160" placeholder="My cool Macintosh app!" required>' +
-      '<small>The public application name shown in the catalog.</small></div>' +
-      '<div class="form-row field-medium"><label>Developer <span class="required-dot">*</span></label><input name="developer_name" type="text" maxlength="160" placeholder="Steve Jobs" required>' +
-      '<small>Company, team or author responsible for the application.</small></div>' +
-      '<div class="form-row field-wide"><label>Bundle ID</label><input name="bundle_id" type="text" maxlength="255" placeholder="com.example.mycoolapp">' +
-      '<small>Usually CFBundleIdentifier from Contents/Info.plist.</small></div>' +
-      '<div class="form-row field-medium"><label>Category <span class="required-dot">*</span></label><select name="category_slug" required>' + uploadCategoryOptions() + '</select>' +
-      '<small>Uses Apple Mac App Store categories.</small></div>' +
-      '<div class="form-row field-medium"><label>Catalog slug <span class="required-dot">*</span></label><input name="slug" type="text" maxlength="80" placeholder="my-cool-macintosh-app" required>' +
-      '<small>Stable URL identifier; generated from the app name if left blank.</small></div>' +
-      '<div class="form-row field-large"><label>Summary <span class="required-dot">*</span></label><input name="summary" type="text" maxlength="240" placeholder="A short one-line description of the application" required>' +
-      '<small>Keep it short; this appears in catalog lists and search results.</small></div>' +
-      '<div class="form-row field-full"><label>Description</label><textarea name="description" placeholder="What does this application do? Mention important legacy-Mac details, limitations and notable features."></textarea>' +
-      '<small>Optional long description for the application page.</small></div></div></section>' +
+      '<div class="form-row field-large"><label>App Name <span class="required-dot">*</span></label><input name="name" type="text" maxlength="160" placeholder="My cool Macintosh app!" required></div>' +
+      '<div class="form-row field-medium"><label>Developer <span class="required-dot">*</span></label><input name="developer_name" type="text" maxlength="160" placeholder="Developer or company" required></div>' +
+      '<div class="form-row field-wide"><label>Bundle ID</label><input name="bundle_id" type="text" maxlength="255" placeholder="com.example.mycoolapp"></div>' +
+      '<div class="form-row field-medium"><label>Category <span class="required-dot">*</span></label><select name="category_slug" required>' + uploadCategoryOptions() + '</select></div>' +
+      '<div class="form-row field-medium"><label>Catalog slug <span class="required-dot">*</span></label><input name="slug" type="text" maxlength="80" placeholder="my-cool-macintosh-app" required></div>' +
+      '<div class="form-row field-large"><label>Summary <span class="required-dot">*</span></label><input name="summary" type="text" maxlength="240" placeholder="A short one-line description" required></div>' +
+      '<div class="form-row field-wide"><label>Homepage</label><input name="website_url" type="url" maxlength="1000" placeholder="https://example.com/"></div>' +
+      '<div class="form-row field-wide"><label>Source / GitHub</label><input name="source_url" type="url" maxlength="1000" placeholder="https://github.com/example/project"></div>' +
+      '<div class="form-row field-full"><label>Description</label><textarea name="description" placeholder="What does this application do?"></textarea></div>' +
+      '</div></section>' +
+      '<section class="bento-card upload-media-card"><h2>Default Icon</h2><p class="panel-help">Optional application-level icon. A release can later override it with its own version-specific icon.</p>' +
+      '<div class="form-row field-wide"><label>Application icon</label><input name="icon_file" type="file" accept="image/jpeg,image/png,image/gif,image/svg+xml,.svg">' +
+      '<small>Up to 2 MB. LegacyStore validates and recompresses the image before storage.</small></div></section>' +
+      '<section class="bento-card upload-submit-card"><div><h2>Create catalog page</h2><p>The page is created first. After that you can upload one or more releases from its contributor page.</p></div>' +
+      '<div class="upload-submit-actions"><button class="blue-button upload-primary-button" id="createApplicationButton" type="submit">Create Application</button></div>' +
+      '<div id="createApplicationNotice" class="form-message"></div></section></form>';
 
-      '<section class="bento-card upload-release-card"><h2>Release</h2><p class="panel-help">Version information for this uploaded build.</p>' +
-      '<div class="compact-field-grid"><div class="form-row field-version"><label>Version <span class="required-dot">*</span></label><input name="version" type="text" maxlength="64" placeholder="1.0.0" required>' +
-      '<small>CFBundleShortVersionString when available.</small></div>' +
-      '<div class="form-row field-date"><label>Release date</label><input name="release_date" type="date"><small>Optional original release date.</small></div>' +
-      '<label class="switch-card"><input name="is_recommended" type="checkbox" value="true" checked><span><strong>Recommended build</strong><small>Prefer this release when it matches the selected Mac.</small></span></label>' +
-      '<div class="form-row field-full"><label>Changelog</label><textarea name="changelog" placeholder="What changed in this release?"></textarea></div></div></section>' +
-
-      '<section class="bento-card upload-media-card"><h2>Images</h2><p class="panel-help">Optional catalog media. All files are validated and recompressed by LegacyStore before storage.</p>' +
-      '<div class="compact-field-grid"><div class="form-row field-wide"><label>Application icon</label><input name="icon_file" type="file" accept="image/jpeg,image/png,image/gif,image/svg+xml,.svg">' +
-      '<small>Optional override for the detected icon. Raster/SVG source up to 2 MB and 2048×2048; stored at up to 512×512 and 1 MB. SVG is allowed only here.</small></div>' +
-      '<div class="form-row field-full"><label>Screenshots</label><input name="screenshots" type="file" accept="image/jpeg,image/png,image/gif" multiple>' +
-      '<small>Up to 3 images, 2 MB each and no larger than 2048×2048. They are recompressed to at most 1 MB each.</small></div></div></section>' +
-
-      '<section class="bento-card upload-compat-card"><h2>Compatibility</h2><p class="panel-help">Use exact patch versions when the application requires them, for example 10.6.8.</p>' +
-      '<div class="compact-field-grid"><div class="form-row field-os"><label>Minimum OS X <span class="required-dot">*</span></label><input name="min_os" type="text" value="10.4" placeholder="10.6.8" required>' +
-      '<small>Oldest exact system release supported.</small></div>' +
-      '<div class="form-row field-os"><label>Maximum supported</label><input name="max_supported_os" type="text" placeholder="10.14.6"><small>Leave empty when no hard maximum is known.</small></div>' +
-      '<div class="form-row field-os"><label>Maximum tested</label><input name="max_tested_os" type="text" value="10.15" placeholder="10.15.7"><small>Newest system on which this build was tested.</small></div>' +
-      '<div class="form-row field-full"><label>Install notes</label><input name="install_notes" type="text" placeholder="Requires Java 6, Rosetta, a reboot, or another special step..."></div></div>' +
-      '<div class="capability-grid"><label><input name="arch_i386" type="checkbox" value="true" checked><span><strong>i386</strong><small>32-bit Intel CPU code</small></span></label>' +
-      '<label><input name="arch_x86_64" type="checkbox" value="true" checked><span><strong>x86_64</strong><small>64-bit Intel CPU code</small></span></label>' +
-      '<label><input name="supports_32bit" type="checkbox" value="true" checked><span><strong>32-bit OS</strong><small>Runs in 32-bit environments</small></span></label>' +
-      '<label><input name="supports_64bit" type="checkbox" value="true" checked><span><strong>64-bit OS</strong><small>Runs in 64-bit environments</small></span></label>' +
-      '<label><input name="hard_block_above_max" type="checkbox" value="true"><span><strong>Hard maximum</strong><small>Block systems above maximum supported</small></span></label></div></section>' +
-
-      '<section class="bento-card upload-submit-card"><div><h2>Submit to LegacyStore</h2><p>Trusted uploads are quarantined until moderation. SHA-256 is calculated by the server.</p></div>' +
-      '<div class="upload-submit-actions"><div class="upload-progress" id="uploadProgress" hidden><span></span></div>' +
-      '<button class="blue-button upload-primary-button" id="submitUploadButton" type="submit">Create Application & Upload</button></div>' +
-      '<div id="uploadWorkflowNotice" class="form-message"></div></section></form>' +
-      '<div class="upload-drop-overlay" id="uploadDropOverlay" hidden><div class="upload-drop-overlay-card">' +
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>' +
-      '<strong>Отпустите файл чтобы загрузить</strong><span>LegacyStore попробует автоматически прочитать метаданные приложения.</span></div></div>';
-
-    bindUploadForms();
-    updateDetectedPackage();
-    setStatus("Showing: Management", "Upload Application", "HTTPS required");
+    bindCreateApplicationForm();
+    setStatus("Showing: Management", "Create Application", "Application metadata only");
     renderSidebar();
   }
 
-  function updateDetectedPackage() {
-    var nameNode = document.getElementById("detectedFileName");
-    var metaNode = document.getElementById("detectedFileMeta");
-    var iconNode = document.getElementById("detectedIcon");
-    var statusNode = document.getElementById("inspectionStatus");
-    if (!nameNode || !metaNode || !iconNode || !statusNode) { return; }
-
-    var file = state.uploadContext.file;
-    var inspection = state.uploadContext.inspection || {};
-    var metadata = inspection.metadata || {};
-    nameNode.textContent = file ? file.name : (inspection.file_name || "No file selected");
-    if (file) {
-      metaNode.textContent = formatSize(file.size) + (inspection.package_type ? " · " + String(inspection.package_type).toUpperCase() : "");
-    } else if (inspection.package_type === "app") {
-      metaNode.textContent = "Raw .app bundle inspected for metadata only. Choose a DMG, PKG or ZIP to submit the artifact.";
-    } else {
-      metaNode.textContent = "Metadata has not been inspected yet.";
-    }
-
-    iconNode.innerHTML = metadata.icon_data_url ?
-      '<img src="' + escapeHTML(metadata.icon_data_url) + '" alt="">' :
-      '<span>' + escapeHTML((metadata.name || "APP").slice(0, 3).toUpperCase()) + '</span>';
-    var warningCount = (inspection.warnings || []).length;
-    statusNode.textContent = state.uploadContext.inspecting ? "Reading metadata..." :
-      (inspection.metadata ? (warningCount ? "Metadata partially read" : "Metadata inspected") : "Waiting for file");
-    statusNode.classList.toggle("active", !!inspection.metadata && !state.uploadContext.inspecting && warningCount === 0);
-  }
-
-  function applyUploadInspection(inspection) {
-    inspection = inspection || {};
-    state.uploadContext.inspection = inspection;
-    state.uploadContext.iconDataURL = inspection.metadata && inspection.metadata.icon_data_url ? inspection.metadata.icon_data_url : "";
-    var form = document.getElementById("uploadSubmissionForm");
+  function bindCreateApplicationForm() {
+    var form = document.getElementById("createApplicationForm");
     if (!form) { return; }
-    var metadata = inspection.metadata || {};
-
-    function setValue(name, value) {
-      if (value == null || value === "") { return; }
-      var input = form.querySelector('[name="' + name + '"]');
-      if (input) { input.value = value; }
-    }
-
-    setValue("name", metadata.name);
-    setValue("bundle_id", metadata.bundle_id);
-    setValue("version", metadata.version);
-    setValue("min_os", metadata.minimum_os);
-    if (metadata.category_slug) {
-      var category = form.querySelector('[name="category_slug"]');
-      if (category && Array.prototype.some.call(category.options, function (option) { return option.value === metadata.category_slug; })) {
-        category.value = metadata.category_slug;
-      }
-    }
-    var slug = form.querySelector('[name="slug"]');
-    if (slug && (!slug.value || slug.dataset.generated === "true") && metadata.name) {
-      slug.value = slugifyAppName(metadata.name);
-      slug.dataset.generated = "true";
-    }
-    updateDetectedPackage();
-    showInspectionWarnings(inspection.warnings || []);
-  }
-
-  function inspectArtifactFile(file) {
-    if (!file) { return; }
-    state.uploadContext.appId = "";
-    state.uploadContext.versionId = "";
-    state.uploadContext.file = file;
-    state.uploadContext.inspecting = true;
-    state.uploadContext.inspection = { file_name: file.name, package_type: file.name.split(".").pop().toLowerCase(), metadata: {} };
-    updateDetectedPackage();
-
-    var formData = new FormData();
-    formData.append("file", file, file.name);
-    api("/admin/uploads/inspect", { method: "POST", body: formData }).then(function (payload) {
-      state.uploadContext.inspecting = false;
-      applyUploadInspection(payload.inspection || {});
-    }).catch(function (error) {
-      state.uploadContext.inspecting = false;
-      updateDetectedPackage();
-      showToast("Не удалось прочитать метаданные: " + humanError(error), "error");
-    });
-  }
-
-  function readDirectoryEntries(directoryEntry) {
-    return new Promise(function (resolve, reject) {
-      var reader = directoryEntry.createReader();
-      var entries = [];
-      function nextBatch() {
-        reader.readEntries(function (batch) {
-          if (!batch.length) { resolve(entries); return; }
-          entries = entries.concat(Array.prototype.slice.call(batch));
-          nextBatch();
-        }, reject);
-      }
-      nextBatch();
-    });
-  }
-
-  function entryAsFile(entry) {
-    return new Promise(function (resolve, reject) { entry.file(resolve, reject); });
-  }
-
-  function inspectDroppedAppBundle(entry) {
-    state.uploadContext.appId = "";
-    state.uploadContext.versionId = "";
-    state.uploadContext.file = null;
-    state.uploadContext.inspecting = true;
-    state.uploadContext.inspection = { file_name: entry.name, package_type: "app", metadata: {} };
-    updateDetectedPackage();
-
-    return readDirectoryEntries(entry).then(function (rootEntries) {
-      var contents = rootEntries.find(function (item) { return item.isDirectory && item.name === "Contents"; });
-      if (!contents) { throw new Error("Contents directory not found"); }
-      return readDirectoryEntries(contents);
-    }).then(function (contentsEntries) {
-      var plistEntry = contentsEntries.find(function (item) { return item.isFile && item.name === "Info.plist"; });
-      var resources = contentsEntries.find(function (item) { return item.isDirectory && item.name === "Resources"; });
-      if (!plistEntry) { throw new Error("Info.plist not found"); }
-      return Promise.all([
-        entryAsFile(plistEntry),
-        resources ? readDirectoryEntries(resources).then(function (entries) {
-          var candidates = entries.filter(function (item) { return item.isFile && /\.(icns|png)$/i.test(item.name); });
-          if (!candidates.length) { return null; }
-          var preferred = candidates.find(function (item) { return /\.icns$/i.test(item.name); }) || candidates[0];
-          return entryAsFile(preferred);
-        }) : Promise.resolve(null)
-      ]);
-    }).then(function (parts) {
-      var formData = new FormData();
-      formData.append("plist", parts[0], "Info.plist");
-      if (parts[1]) { formData.append("icon", parts[1], parts[1].name); }
-      return api("/admin/uploads/inspect-app-bundle", { method: "POST", body: formData });
-    }).then(function (payload) {
-      state.uploadContext.inspecting = false;
-      var inspection = payload.inspection || {};
-      inspection.file_name = entry.name;
-      applyUploadInspection(inspection);
-      showToast("Метаданные .app прочитаны. Для загрузки самого приложения упакуйте bundle в DMG, PKG или ZIP.", "error");
-    }).catch(function (error) {
-      state.uploadContext.inspecting = false;
-      updateDetectedPackage();
-      showToast("Не удалось прочитать .app bundle: " + (error.message || humanError(error)), "error");
-    });
-  }
-
-  function bindUploadDropZone() {
-    var dropZone = document.getElementById("artifactDropZone");
-    var fileInput = document.getElementById("artifactFileInput");
-    var overlay = document.getElementById("uploadDropOverlay");
-    if (!dropZone || !fileInput || !overlay) { return; }
-
-    dropZone.addEventListener("click", function () { fileInput.click(); });
-    dropZone.addEventListener("keydown", function (event) {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        fileInput.click();
-      }
-    });
-    fileInput.addEventListener("change", function () {
-      if (fileInput.files && fileInput.files[0]) { inspectArtifactFile(fileInput.files[0]); }
-    });
-
-    var dragDepth = 0;
-    main.ondragenter = function (event) {
-      event.preventDefault();
-      dragDepth += 1;
-      overlay.hidden = false;
-    };
-    main.ondragover = function (event) {
-      event.preventDefault();
-      if (event.dataTransfer) { event.dataTransfer.dropEffect = "copy"; }
-    };
-    main.ondragleave = function (event) {
-      event.preventDefault();
-      dragDepth = Math.max(0, dragDepth - 1);
-      if (dragDepth === 0) { overlay.hidden = true; }
-    };
-    main.ondrop = function (event) {
-      event.preventDefault();
-      dragDepth = 0;
-      overlay.hidden = true;
-      var transfer = event.dataTransfer;
-      if (!transfer) { return; }
-      var item = transfer.items && transfer.items[0];
-      var entry = item && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-      if (entry && entry.isDirectory && /\.app$/i.test(entry.name)) {
-        inspectDroppedAppBundle(entry);
-        return;
-      }
-      if (transfer.files && transfer.files[0]) {
-        inspectArtifactFile(transfer.files[0]);
-      }
-    };
-  }
-
-  function buildArtifactFormData(form, file) {
-    var formData = new FormData();
-    formData.append("file", file, file.name);
-    ["min_os", "max_supported_os", "max_tested_os", "install_notes"].forEach(function (name) {
-      var input = form.querySelector('[name="' + name + '"]');
-      formData.append(name, input ? input.value || "" : "");
-    });
-    ["arch_i386", "arch_x86_64", "supports_32bit", "supports_64bit", "hard_block_above_max"].forEach(function (name) {
-      var input = form.querySelector('[name="' + name + '"]');
-      formData.append(name, input && input.checked ? "true" : "false");
-    });
-    return formData;
-  }
-
-  function dataURLToBlob(dataURL) {
-    var parts = String(dataURL || "").split(",");
-    if (parts.length !== 2) { throw new Error("invalid_image_data"); }
-    var mimeMatch = parts[0].match(/^data:([^;]+);base64$/i);
-    if (!mimeMatch) { throw new Error("invalid_image_data"); }
-    var binary = atob(parts[1]);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i += 1) { bytes[i] = binary.charCodeAt(i); }
-    return new Blob([bytes], { type: mimeMatch[1] });
-  }
-
-  function maybeSaveDetectedIcon(appId, versionId, form) {
-    var inspection = state.uploadContext.inspection || {};
-    var metadata = inspection.metadata || {};
-    if (!metadata.icon_data_url) { return Promise.resolve(); }
-    var blob;
-    try {
-      blob = dataURLToBlob(metadata.icon_data_url);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    var formData = new FormData();
-    formData.append("file", blob, "detected-icon.png");
-    formData.append("app_version_id", String(Number(versionId || 0)));
-    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
-    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value || "");
-    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
-      method: "POST",
-      body: formData
-    }).catch(function (error) {
-      showToast("Иконка распознана, но сохранить её не удалось: " + humanError(error), "error");
-    });
-  }
-
-  function uploadIconFile(appId, versionId, form, file) {
-    var formData = new FormData();
-    formData.append("file", file, file.name || "icon");
-    formData.append("app_version_id", String(Number(versionId || 0)));
-    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
-    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
-      form.querySelector('[name="max_tested_os"]').value || "15");
-    return api("/admin/apps/" + encodeURIComponent(appId) + "/icons/upload", {
-      method: "POST",
-      body: formData
-    });
-  }
-
-  function maybeSaveUploadIcon(appId, versionId, form) {
-    var input = form.querySelector('[name="icon_file"]');
-    var file = input && input.files ? input.files[0] : null;
-    if (file) {
-      return uploadIconFile(appId, versionId, form, file);
-    }
-    return maybeSaveDetectedIcon(appId, versionId, form);
-  }
-
-  function maybeSaveUploadScreenshots(appId, versionId, form) {
-    var input = form.querySelector('[name="screenshots"]');
-    var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
-    if (!files.length) { return Promise.resolve(); }
-    var formData = new FormData();
-    files.forEach(function (file) { formData.append("images", file, file.name); });
-    formData.append("app_version_id", String(Number(versionId || 0)));
-    formData.append("min_os", form.querySelector('[name="min_os"]').value || "");
-    formData.append("max_os", form.querySelector('[name="max_supported_os"]').value ||
-      form.querySelector('[name="max_tested_os"]').value || "15");
-    return api("/admin/apps/" + encodeURIComponent(appId) + "/screenshots/upload", {
-      method: "POST",
-      body: formData
-    });
-  }
-
-  function validateUploadImages(form) {
-    var iconInput = form.querySelector('[name="icon_file"]');
-    var icon = iconInput && iconInput.files ? iconInput.files[0] : null;
-    if (icon && icon.size > 2 * 1024 * 1024) {
-      return "Application icon must be 2 MB or smaller.";
-    }
-    var screenshotsInput = form.querySelector('[name="screenshots"]');
-    var screenshots = screenshotsInput && screenshotsInput.files ? Array.prototype.slice.call(screenshotsInput.files) : [];
-    if (screenshots.length > 3) {
-      return "You can upload at most 3 screenshots for a release.";
-    }
-    if (screenshots.some(function (file) { return file.size > 2 * 1024 * 1024; })) {
-      return "Each screenshot must be 2 MB or smaller.";
-    }
-    return "";
-  }
-
-  function bindUploadForms() {
-    var form = document.getElementById("uploadSubmissionForm");
-    if (!form) { return; }
-    bindUploadDropZone();
-
     var nameInput = form.querySelector('[name="name"]');
     var slugInput = form.querySelector('[name="slug"]');
     if (nameInput && slugInput) {
@@ -1722,78 +1383,321 @@
 
     form.addEventListener("submit", function (event) {
       event.preventDefault();
-      var file = state.uploadContext.file;
-      if (!file) {
-        showToast("Выберите DMG, PKG или ZIP файл. Raw .app можно использовать для чтения метаданных, но не как браузерный artifact.", "error");
+      var iconInput = form.querySelector('[name="icon_file"]');
+      var icon = iconInput && iconInput.files ? iconInput.files[0] : null;
+      if (icon && icon.size > 2 * 1024 * 1024) {
+        showMessage("createApplicationNotice", "Application icon must be 2 MB or smaller.", true);
         return;
       }
-
-      var imageValidationError = validateUploadImages(form);
-      if (imageValidationError) {
-        showToast(imageValidationError, "error");
-        showMessage("uploadWorkflowNotice", imageValidationError, true);
-        return;
-      }
-
-      var button = document.getElementById("submitUploadButton");
-      var progress = document.getElementById("uploadProgress");
-      var progressBar = progress.querySelector("span");
-      button.disabled = true;
-      progress.hidden = false;
-      progressBar.style.width = "8%";
-      showMessage("uploadWorkflowNotice", "Creating application record...", false);
-
       var data = formJSON(form);
-      var appPayload = {
+      var button = document.getElementById("createApplicationButton");
+      button.disabled = true;
+      showMessage("createApplicationNotice", "Creating application page...", false);
+      jsonRequest("POST", "/admin/apps", {
         slug: data.slug,
         name: data.name,
         bundle_id: data.bundle_id || "",
         developer_name: data.developer_name,
         category_slug: data.category_slug,
         summary: data.summary,
-        description: data.description || ""
-      };
-      var appPromise = state.uploadContext.appId ?
-        Promise.resolve({ app: { id: state.uploadContext.appId, moderation_status: "pending" } }) :
-        jsonRequest("POST", "/admin/apps", appPayload);
-
-      appPromise.then(function (payload) {
-        state.uploadContext.appId = String(payload.app.id);
-        progressBar.style.width = "28%";
-        showMessage("uploadWorkflowNotice", "Creating release...", false);
-        if (state.uploadContext.versionId) {
-          return { version: { id: state.uploadContext.versionId } };
-        }
-        return jsonRequest("POST", "/admin/apps/" + encodeURIComponent(payload.app.id) + "/versions", {
-          version: data.version,
-          release_date: data.release_date || "",
-          changelog: data.changelog || "",
-          is_recommended: !!form.querySelector('[name="is_recommended"]:checked')
-        });
+        description: data.description || "",
+        website_url: data.website_url || "",
+        source_url: data.source_url || ""
       }).then(function (payload) {
-        state.uploadContext.versionId = String(payload.version.id);
-        progressBar.style.width = "48%";
-        showMessage("uploadWorkflowNotice", "Uploading package to quarantine...", false);
-        return api("/admin/versions/" + encodeURIComponent(payload.version.id) + "/upload", {
-          method: "POST",
-          body: buildArtifactFormData(form, file)
-        });
+        var app = payload.app || {};
+        state.uploadContext.appId = String(app.id || "");
+        if (!icon) { return payload; }
+        var formData = new FormData();
+        formData.append("file", icon, icon.name || "icon");
+        formData.append("app_version_id", "0");
+        formData.append("min_os", "10.4");
+        formData.append("max_os", "15");
+        return api("/admin/apps/" + encodeURIComponent(app.id) + "/icons/upload", { method: "POST", body: formData }).then(function () { return payload; });
       }).then(function (payload) {
-        progressBar.style.width = "82%";
-        showMessage("uploadWorkflowNotice", "Processing catalog images...", false);
-        return maybeSaveUploadIcon(state.uploadContext.appId, state.uploadContext.versionId, form)
-          .then(function () { return maybeSaveUploadScreenshots(state.uploadContext.appId, state.uploadContext.versionId, form); })
-          .then(function () { return payload; });
-      }).then(function (payload) {
-        progressBar.style.width = "100%";
-        showMessage("uploadWorkflowNotice", "Uploaded to quarantine. SHA-256: " + payload.upload.sha256 + ". Artifact ID: " + payload.artifact.id, false);
-        showToast("Application uploaded successfully and sent to moderation.", "success");
-        button.textContent = "Uploaded";
+        showToast("Application page created.", "success");
+        routeTo("manage-app/" + encodeURIComponent(payload.app.id));
       }).catch(function (error) {
         button.disabled = false;
-        progress.hidden = true;
-        showMessage("uploadWorkflowNotice", humanError(error), true);
-        showToast("Upload failed: " + humanError(error), "error");
+        showMessage("createApplicationNotice", humanError(error), true);
+      });
+    });
+  }
+
+  function renderContributorApp(appId) {
+    if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
+    main.innerHTML = '<div class="loading">Loading application...</div>';
+    api("/admin/apps/" + encodeURIComponent(appId)).then(function (payload) {
+      var app = payload.app || {};
+      var versions = payload.versions || [];
+      var iconHTML = app.icon ?
+        '<div class="app-icon"><span class="app-icon-initials">' + escapeHTML(appInitials(app)) + '</span><img class="app-icon-image" data-app-icon-img src="' + escapeHTML(app.icon) + '" alt=""></div>' :
+        appIconHTML(app, false);
+      var rows = versions.length ? versions.map(function (version) {
+        return '<tr><td><strong>' + escapeHTML(version.version) + '</strong></td><td>' + escapeHTML(version.release_date || "") + '</td><td>' +
+          (version.is_recommended ? '<span class="status-chip active">Recommended</span>' : '') + '</td></tr>';
+      }).join("") : '<tr><td colspan="3" class="muted">No releases yet.</td></tr>';
+
+      main.innerHTML =
+        '<section class="detail-head contributor-app-head">' + iconHTML +
+        '<div><div class="muted">Contributor application page</div><h1>' + escapeHTML(app.name || "Application") + '</h1>' +
+        '<p>' + escapeHTML(app.summary || "") + '</p><div class="badge-row">' + statusChip(app.moderation_status || "pending") + '</div></div>' +
+        '<div class="detail-actions"><button class="blue-button" id="uploadVersionButton" type="button">Upload Version</button>' +
+        (app.slug ? '<button class="metal-button" data-route="app/' + escapeHTML(app.slug) + '" type="button">Public Page</button>' : '') +
+        '</div></section>' +
+        '<div class="detail-grid"><section class="detail-copy">' +
+        '<section class="section-panel contributor-summary"><div class="section-header"><h2>Application metadata</h2></div>' +
+        '<div class="contributor-metadata-grid">' +
+        infoRow("Developer", app.developer_name) + infoRow("Bundle ID", app.bundle_id) + infoRow("Category", app.category) +
+        infoRow("Homepage", app.website_url) + infoRow("Source", app.source_url) + '</div>' +
+        '<p>' + escapeHTML(app.description || "") + '</p></section>' +
+        '<h2>Releases</h2><table class="version-table"><thead><tr><th>Version</th><th>Date</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '</section><aside class="side-box"><h2>Contribution</h2><p class="muted">Application ID: <span class="mono">' + escapeHTML(app.id) + '</span></p>' +
+        '<p>Upload binaries as separate releases. Each release gets its own compatibility metadata and optional version-specific icon.</p>' +
+        '<button class="blue-button full-width" id="uploadVersionButtonAside" type="button">Upload Version</button></aside></div>';
+
+      bindRouteButtons(main);
+      bindImageFallbacks(main);
+      function goUpload() { routeTo("upload-version/" + encodeURIComponent(app.id)); }
+      var a=document.getElementById("uploadVersionButton");
+      var b=document.getElementById("uploadVersionButtonAside");
+      if(a){a.addEventListener("click",goUpload);}
+      if(b){b.addEventListener("click",goUpload);}
+      setStatus("Showing: " + (app.name || "Application"), versions.length + " releases", "Contributor view");
+      renderSidebar();
+    }).catch(renderError);
+  }
+
+  function architectureOptionsHTML(selected) {
+    selected = selected || [];
+    function checked(code) { return selected.indexOf(code) >= 0 ? " checked" : ""; }
+    return '<div class="architecture-grid">' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="i386"' + checked("i386") + '><span><strong>Intel 32 Bit (i386 or i686)</strong><small>Generic 32-bit Intel build. Use i686 only for a specifically i686-targeted artifact.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="x86_64"' + checked("x86_64") + '><span><strong>Intel 64 Bit (x86_64)</strong><small>64-bit Intel build.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc"' + checked("ppc") + '><span><strong>PowerPC 32 Bit (ppc)</strong><small>Generic 32-bit PowerPC build.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc-g3"' + checked("ppc-g3") + '><span><strong>PowerPC G3 (ppc-g3)</strong><small>G3-specific build.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc-g4"' + checked("ppc-g4") + '><span><strong>PowerPC G4 (ppc-g4)</strong><small>G4-specific build.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc-g5"' + checked("ppc-g5") + '><span><strong>PowerPC G5 (ppc-g5)</strong><small>G5-specific build.</small></span></label>' +
+      '<label class="architecture-card"><input name="architecture" type="checkbox" value="ppc64"' + checked("ppc64") + '><span><strong>PowerPC 64 Bit (ppc64)</strong><small>64-bit PowerPC build.</small></span></label>' +
+      '</div>';
+  }
+
+  function renderUploadVersion(appId) {
+    if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
+    state.uploadContext = { appId: String(appId), versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" };
+    main.innerHTML = '<div class="loading">Loading application...</div>';
+    api("/admin/apps/" + encodeURIComponent(appId)).then(function (payload) {
+      renderReleaseUploadStepOne(payload.app || {});
+    }).catch(renderError);
+  }
+
+  function renderReleaseUploadStepOne(app) {
+    main.innerHTML =
+      '<div class="view-title upload-page-title"><div><div class="muted">Release contribution for ' + escapeHTML(app.name || "Application") + '</div><h1>Upload Version</h1>' +
+      '<p class="view-subtitle">Step 1 of 2 — upload the package and let LegacyStore inspect it before release metadata is committed.</p></div>' +
+      '<button class="metal-button" data-route="manage-app/' + escapeHTML(app.id) + '" type="button">Back to Application</button></div>' +
+      '<div class="contribution-steps"><div class="contribution-step is-active"><span>1</span><strong>Upload & Analyze</strong></div><div class="contribution-step"><span>2</span><strong>Release Metadata</strong></div></div>' +
+      '<section class="bento-card contribution-upload-card"><div class="card-heading-row"><div><h2>Application package</h2><p class="card-kicker">DMG, PKG, ZIP or ISO</p></div><span class="status-chip" id="inspectionStatus">Waiting for file</span></div>' +
+      '<input id="artifactFileInput" type="file" accept=".dmg,.pkg,.mpkg,.zip,.iso" hidden>' +
+      '<button class="artifact-dropzone" id="artifactDropZone" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>' +
+      '<strong>Drop a release package here</strong><span>or click to choose a file</span><small>The server calculates SHA-256 and attempts to read Info.plist, version, minimum OS, icon and Mach-O architectures.</small></button>' +
+      '<div class="detected-package" id="detectedPackage"><div class="detected-icon" id="detectedIcon"><span>APP</span></div><div><strong id="detectedFileName">No file selected</strong><p id="detectedFileMeta">Nothing has been uploaded yet.</p></div></div>' +
+      '<div class="upload-submit-actions"><div id="releaseUploadNotice" class="form-message"></div><button class="blue-button upload-primary-button" id="analyzeReleaseButton" type="button" disabled>Upload & Analyze</button></div></section>' +
+      '<div class="upload-drop-overlay" id="uploadDropOverlay" hidden><div class="upload-drop-overlay-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg><strong>Drop release package</strong><span>The file will stay in quarantine until Step 2 is submitted.</span></div></div>';
+
+    bindRouteButtons(main);
+    bindReleaseDropZone(app);
+    setStatus("Showing: Management", "Upload Version — Step 1", app.name || "");
+    renderSidebar();
+  }
+
+  function bindReleaseDropZone(app) {
+    var dropZone=document.getElementById("artifactDropZone");
+    var fileInput=document.getElementById("artifactFileInput");
+    var overlay=document.getElementById("uploadDropOverlay");
+    var analyze=document.getElementById("analyzeReleaseButton");
+    if(!dropZone||!fileInput||!overlay||!analyze){return;}
+
+    function selectFile(file) {
+      if(!file){return;}
+      state.uploadContext.file=file;
+      var nameNode=document.getElementById("detectedFileName");
+      var metaNode=document.getElementById("detectedFileMeta");
+      if(nameNode){nameNode.textContent=file.name;}
+      if(metaNode){metaNode.textContent=formatSize(file.size)+" · ready to upload";}
+      analyze.disabled=false;
+      var status=document.getElementById("inspectionStatus");
+      if(status){status.textContent="Ready";}
+    }
+
+    dropZone.addEventListener("click",function(){fileInput.click();});
+    fileInput.addEventListener("change",function(){selectFile(fileInput.files&&fileInput.files[0]);});
+    var dragDepth=0;
+    main.ondragenter=function(event){event.preventDefault();dragDepth+=1;overlay.hidden=false;};
+    main.ondragover=function(event){event.preventDefault();if(event.dataTransfer){event.dataTransfer.dropEffect="copy";}};
+    main.ondragleave=function(event){event.preventDefault();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth){overlay.hidden=true;}};
+    main.ondrop=function(event){event.preventDefault();dragDepth=0;overlay.hidden=true;if(event.dataTransfer&&event.dataTransfer.files&&event.dataTransfer.files[0]){selectFile(event.dataTransfer.files[0]);}};
+
+    analyze.addEventListener("click",function(){
+      var file=state.uploadContext.file;
+      if(!file){return;}
+      analyze.disabled=true;
+      var status=document.getElementById("inspectionStatus");
+      if(status){status.textContent="Uploading & analyzing...";}
+      showMessage("releaseUploadNotice","Uploading package to quarantine and reading metadata...",false);
+      var formData=new FormData();
+      formData.append("file",file,file.name);
+      api("/contributions/apps/"+encodeURIComponent(app.id)+"/stage",{method:"POST",body:formData}).then(function(payload){
+        state.uploadContext.stageUid=payload.stage&&payload.stage.uid?payload.stage.uid:"";
+        state.uploadContext.inspection=payload.inspection||{};
+        state.uploadContext.iconDataURL=payload.inspection&&payload.inspection.metadata?payload.inspection.metadata.icon_data_url||"":"";
+        renderReleaseMetadataStep(app,payload.stage||{},payload.inspection||{});
+      }).catch(function(error){
+        analyze.disabled=false;
+        if(status){status.textContent="Upload failed";}
+        showMessage("releaseUploadNotice",humanError(error),true);
+      });
+    });
+  }
+
+  function renderReleaseMetadataStep(app, stage, inspection) {
+    var metadata=inspection.metadata||{};
+    var detectedArch=metadata.architectures||stage.detected_architectures||[];
+    var warnings=inspection.warnings||[];
+    main.ondragenter=null; main.ondragover=null; main.ondragleave=null; main.ondrop=null;
+    main.innerHTML =
+      '<div class="view-title upload-page-title"><div><div class="muted">Release contribution for ' + escapeHTML(app.name || "Application") + '</div><h1>Review Release Metadata</h1>' +
+      '<p class="view-subtitle">Step 2 of 2 — verify detected values, add release-specific metadata and submit the artifact.</p></div></div>' +
+      '<div class="contribution-steps"><div class="contribution-step is-complete"><span>✓</span><strong>Upload & Analyze</strong></div><div class="contribution-step is-active"><span>2</span><strong>Release Metadata</strong></div></div>' +
+      '<form id="releaseMetadataForm" class="upload-bento">' +
+      '<section class="bento-card upload-package-card"><div class="card-heading-row"><div><h2>Analyzed package</h2><p class="card-kicker">' + escapeHTML(stage.original_filename || inspection.file_name || "") + '</p></div><span class="status-chip active">SHA-256 calculated</span></div>' +
+      '<div class="detected-package"><div class="detected-icon">' + (metadata.icon_data_url?'<img src="'+escapeHTML(metadata.icon_data_url)+'" alt="">':'<span>APP</span>') + '</div><div><strong>' + escapeHTML(metadata.name || app.name || "Application") + '</strong>' +
+      '<p>' + escapeHTML(formatSize(stage.size_bytes || 0)) + ' · <span class="mono">' + escapeHTML(stage.sha256 || "") + '</span></p></div></div>' +
+      (warnings.length?'<div class="inspection-warning-list">'+warnings.map(function(w){return '<div class="web-security-note">'+escapeHTML(w.message||w.code)+'</div>';}).join("")+'</div>':'') +
+      '</section>' +
+      '<section class="bento-card upload-release-card"><h2>Release</h2><div class="compact-field-grid">' +
+      '<div class="form-row field-version"><label>Version <span class="required-dot">*</span></label><input name="version" type="text" maxlength="64" value="' + escapeHTML(metadata.version || stage.detected_version || "") + '" required></div>' +
+      '<div class="form-row field-date"><label>Release date</label><input name="release_date" type="date"></div>' +
+      '<label class="switch-card"><input name="is_recommended" type="checkbox" value="true" checked><span><strong>Recommended build</strong><small>Prefer this release when it matches the selected Mac.</small></span></label>' +
+      '<div class="form-row field-full"><label>Changelog</label><textarea name="changelog" placeholder="What changed in this release?"></textarea></div>' +
+      '</div></section>' +
+      '<section class="bento-card upload-compat-card"><h2>Compatibility</h2><p class="panel-help">Architecture and bitness are represented by the same architecture codes. There are no separate 32/64-bit flags.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-os"><label>Minimum OS X <span class="required-dot">*</span></label><input name="min_os" type="text" value="' + escapeHTML(metadata.minimum_os || stage.detected_min_os || "10.4") + '" placeholder="10.6.8" required></div>' +
+      '<div class="form-row field-os"><label>Maximum supported</label><input name="max_supported_os" type="text" placeholder="10.14.6"></div>' +
+      '<div class="form-row field-os"><label>Maximum tested</label><input name="max_tested_os" type="text" placeholder="10.15.7"></div>' +
+      '<div class="form-row field-full"><label>Install notes</label><input name="install_notes" type="text" placeholder="Requires Java 6, Rosetta, reboot, etc."></div></div>' +
+      '<h3>Architectures</h3>' + architectureOptionsHTML(detectedArch) +
+      '<div class="capability-grid compact-capabilities"><label><input name="requires_rosetta" type="checkbox" value="true"><span><strong>Requires Rosetta</strong><small>For translated PowerPC execution on Intel OS X.</small></span></label>' +
+      '<label><input name="requires_java" type="checkbox" value="true"><span><strong>Requires Java</strong><small>Application requires a Java runtime.</small></span></label>' +
+      '<label><input name="hard_block_above_max" type="checkbox" value="true"><span><strong>Hard maximum</strong><small>Block systems newer than Maximum supported.</small></span></label></div></section>' +
+      '<section class="bento-card upload-media-card"><h2>Release Images</h2><p class="panel-help">These images are associated with this specific version.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-wide"><label>Version-specific icon</label><input name="icon_file" type="file" accept="image/jpeg,image/png,image/gif,image/svg+xml,.svg"><small>Leave empty to use the detected application icon when available.</small></div>' +
+      '<div class="form-row field-full"><label>Screenshots</label><input name="screenshots" type="file" accept="image/jpeg,image/png,image/gif" multiple><small>Up to 3 images, 2 MB each.</small></div></div></section>' +
+      '<section class="bento-card upload-submit-card"><div><h2>Submit release</h2><p>The staged package will become an artifact and enter moderation according to your role.</p></div>' +
+      '<div class="upload-submit-actions"><button class="metal-button" data-route="manage-app/' + escapeHTML(app.id) + '" type="button">Cancel</button><button class="blue-button upload-primary-button" id="commitReleaseButton" type="submit">Submit Release</button></div>' +
+      '<div id="releaseMetadataNotice" class="form-message"></div></section></form>';
+
+    bindRouteButtons(main);
+    bindReleaseMetadataForm(app,stage);
+    setStatus("Showing: Management","Upload Version — Step 2",app.name||"");
+    renderSidebar();
+  }
+
+  function selectedArchitectures(form) {
+    return Array.prototype.slice.call(form.querySelectorAll('[name="architecture"]:checked')).map(function(input){return input.value;});
+  }
+
+  function dataURLToBlob(dataURL) {
+    var parts = String(dataURL || "").split(",");
+    if (parts.length !== 2) { throw new Error("invalid_image_data"); }
+    var mimeMatch = parts[0].match(/^data:([^;]+);base64$/i);
+    if (!mimeMatch) { throw new Error("invalid_image_data"); }
+    var binary = atob(parts[1]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) { bytes[i] = binary.charCodeAt(i); }
+    return new Blob([bytes], { type: mimeMatch[1] });
+  }
+
+  function uploadReleaseIcon(appId, versionId, form) {
+    var input=form.querySelector('[name="icon_file"]');
+    var file=input&&input.files?input.files[0]:null;
+    var formData=new FormData();
+    if(file){
+      formData.append("file",file,file.name||"icon");
+    }else{
+      var inspection=state.uploadContext.inspection||{};
+      var metadata=inspection.metadata||{};
+      if(!metadata.icon_data_url){return Promise.resolve();}
+      var blob=dataURLToBlob(metadata.icon_data_url);
+      formData.append("file",blob,"detected-icon.png");
+    }
+    formData.append("app_version_id",String(versionId));
+    formData.append("min_os",form.querySelector('[name="min_os"]').value||"10.4");
+    formData.append("max_os",form.querySelector('[name="max_supported_os"]').value||form.querySelector('[name="max_tested_os"]').value||"15");
+    return api("/admin/apps/"+encodeURIComponent(appId)+"/icons/upload",{method:"POST",body:formData});
+  }
+
+  function uploadReleaseScreenshots(appId, versionId, form) {
+    var input=form.querySelector('[name="screenshots"]');
+    var files=input&&input.files?Array.prototype.slice.call(input.files):[];
+    if(!files.length){return Promise.resolve();}
+    var formData=new FormData();
+    files.forEach(function(file){formData.append("images",file,file.name);});
+    formData.append("app_version_id",String(versionId));
+    formData.append("min_os",form.querySelector('[name="min_os"]').value||"10.4");
+    formData.append("max_os",form.querySelector('[name="max_supported_os"]').value||form.querySelector('[name="max_tested_os"]').value||"15");
+    return api("/admin/apps/"+encodeURIComponent(appId)+"/screenshots/upload",{method:"POST",body:formData});
+  }
+
+  function validateReleaseImages(form) {
+    var iconInput=form.querySelector('[name="icon_file"]');
+    var icon=iconInput&&iconInput.files?iconInput.files[0]:null;
+    if(icon&&icon.size>2*1024*1024){return "Version-specific icon must be 2 MB or smaller.";}
+    var screenshotsInput=form.querySelector('[name="screenshots"]');
+    var screenshots=screenshotsInput&&screenshotsInput.files?Array.prototype.slice.call(screenshotsInput.files):[];
+    if(screenshots.length>3){return "You can upload at most 3 screenshots for a release.";}
+    if(screenshots.some(function(file){return file.size>2*1024*1024;})){return "Each screenshot must be 2 MB or smaller.";}
+    return "";
+  }
+
+  function bindReleaseMetadataForm(app,stage) {
+    var form=document.getElementById("releaseMetadataForm");
+    if(!form){return;}
+    form.addEventListener("submit",function(event){
+      event.preventDefault();
+      var imageError=validateReleaseImages(form);
+      if(imageError){showMessage("releaseMetadataNotice",imageError,true);return;}
+      var architectures=selectedArchitectures(form);
+      if(!architectures.length){showMessage("releaseMetadataNotice","Select at least one architecture.",true);return;}
+      var button=document.getElementById("commitReleaseButton");
+      button.disabled=true;
+      showMessage("releaseMetadataNotice","Creating release and artifact...",false);
+      var data=formJSON(form);
+      jsonRequest("POST","/contributions/uploads/"+encodeURIComponent(stage.uid||state.uploadContext.stageUid)+"/commit",{
+        version:data.version,
+        release_date:data.release_date||"",
+        changelog:data.changelog||"",
+        is_recommended:!!form.querySelector('[name="is_recommended"]:checked'),
+        min_os:data.min_os,
+        max_supported_os:data.max_supported_os||"",
+        max_tested_os:data.max_tested_os||"",
+        hard_block_above_max:!!form.querySelector('[name="hard_block_above_max"]:checked'),
+        architectures:architectures,
+        requires_rosetta:!!form.querySelector('[name="requires_rosetta"]:checked'),
+        requires_java:!!form.querySelector('[name="requires_java"]:checked'),
+        install_notes:data.install_notes||""
+      }).then(function(payload){
+        var release=payload.release||{};
+        state.uploadContext.versionId=String(release.version_id||"");
+        showMessage("releaseMetadataNotice","Release created. Processing version-specific images...",false);
+        return uploadReleaseIcon(app.id,release.version_id,form)
+          .then(function(){return uploadReleaseScreenshots(app.id,release.version_id,form);})
+          .then(function(){return release;});
+      }).then(function(release){
+        showToast("Release submitted successfully.", "success");
+        routeTo("manage-app/"+encodeURIComponent(app.id));
+      }).catch(function(error){
+        button.disabled=false;
+        showMessage("releaseMetadataNotice",humanError(error),true);
       });
     });
   }
@@ -1908,6 +1812,14 @@
     if (state.route === "search") { renderSearch(parsed.params.get("q") || ""); return; }
     if (state.route.indexOf("app/") === 0) { renderApp(state.route.split("/")[1]); return; }
     if (state.route === "top-charts") { renderTopCharts(); return; }
+    if (state.route.indexOf("manage-app/") === 0) {
+      if (!canUpload(state.currentUser)) { routeTo(state.currentUser ? "profile" : "login"); return; }
+      renderContributorApp(state.route.split("/")[1]); return;
+    }
+    if (state.route.indexOf("upload-version/") === 0) {
+      if (!canUpload(state.currentUser)) { routeTo(state.currentUser ? "profile" : "login"); return; }
+      renderUploadVersion(state.route.split("/")[1]); return;
+    }
     if (state.route === "logout") { performLogout(); return; }
 
     if (["profile", "security", "legacy-passwords"].indexOf(state.route) >= 0 && !state.currentUser) {
