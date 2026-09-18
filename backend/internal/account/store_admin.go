@@ -134,7 +134,13 @@ func (s *Store) ListAdminApps(ctx context.Context, status string, limit int) ([]
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT a.id, a.slug, a.name, COALESCE(a.bundle_id, ''), a.developer_name, a.summary, COALESCE(a.description, ''),
-		       COALESCE(a.website_url, ''), COALESCE(a.source_url, ''), COALESCE(c.name, ''), a.moderation_status, a.created_at::text, a.updated_at::text
+		       COALESCE(a.website_url, ''), COALESCE(a.source_url, ''), COALESCE(c.slug, ''), COALESCE(c.name, ''),
+		       COALESCE((
+		           SELECT image_url FROM icons i
+		           WHERE i.app_id = a.id AND i.app_version_id IS NULL
+		           ORDER BY i.id DESC LIMIT 1
+		       ), ''),
+		       a.moderation_status, a.created_at::text, a.updated_at::text
 		FROM apps a
 		LEFT JOIN app_categories ac ON ac.app_id = a.id
 		LEFT JOIN categories c ON c.id = ac.category_id
@@ -149,12 +155,42 @@ func (s *Store) ListAdminApps(ctx context.Context, status string, limit int) ([]
 	var apps []AdminApp
 	for rows.Next() {
 		var app AdminApp
-		if err := rows.Scan(&app.ID, &app.Slug, &app.Name, &app.BundleID, &app.DeveloperName, &app.Summary, &app.Description, &app.WebsiteURL, &app.SourceURL, &app.Category, &app.ModerationStatus, &app.CreatedAt, &app.UpdatedAt); err != nil {
+		if err := rows.Scan(&app.ID, &app.Slug, &app.Name, &app.BundleID, &app.DeveloperName, &app.Summary, &app.Description, &app.WebsiteURL, &app.SourceURL, &app.CategorySlug, &app.Category, &app.Icon, &app.ModerationStatus, &app.CreatedAt, &app.UpdatedAt); err != nil {
 			return nil, err
 		}
 		apps = append(apps, app)
 	}
 	return apps, rows.Err()
+}
+
+func (s *Store) GetAdminApp(ctx context.Context, appID int64) (*AdminApp, error) {
+	var app AdminApp
+	err := s.db.QueryRowContext(ctx, `
+		SELECT a.id, a.slug, a.name, COALESCE(a.bundle_id, ''), a.developer_name, a.summary, COALESCE(a.description, ''),
+		       COALESCE(a.website_url, ''), COALESCE(a.source_url, ''), COALESCE(c.slug, ''), COALESCE(c.name, ''),
+		       COALESCE((
+		           SELECT image_url FROM icons i
+		           WHERE i.app_id = a.id AND i.app_version_id IS NULL
+		           ORDER BY i.id DESC LIMIT 1
+		       ), ''),
+		       a.moderation_status, a.created_at::text, a.updated_at::text
+		FROM apps a
+		LEFT JOIN app_categories ac ON ac.app_id = a.id
+		LEFT JOIN categories c ON c.id = ac.category_id
+		WHERE a.id = $1
+		LIMIT 1
+	`, appID).Scan(
+		&app.ID, &app.Slug, &app.Name, &app.BundleID, &app.DeveloperName, &app.Summary, &app.Description,
+		&app.WebsiteURL, &app.SourceURL, &app.CategorySlug, &app.Category, &app.Icon,
+		&app.ModerationStatus, &app.CreatedAt, &app.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &app, nil
 }
 
 func (s *Store) CreateAdminApp(ctx context.Context, actor User, app AdminApp, categorySlug string, ip net.IP, userAgent string) (*AdminApp, error) {
