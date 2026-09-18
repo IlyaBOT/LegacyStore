@@ -209,32 +209,45 @@ test_reviews() {
   fi
   TOKEN=$REGISTER_TOKEN
 
-  api_request POST '/api/v1/apps/pixelmator/reviews' 1 "$TOKEN" '{"rating":5,"title":"API Review","body":"Integration test review."}'
-  REVIEW_ID=$(body_value '.review.id // empty')
-  if ! status_is 200 || [ -z "$REVIEW_ID" ]; then
-    err "$NAME" Create 'review id' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  api_request POST '/api/v1/apps/pixelmator/reviews' 1 "$TOKEN" '{"rating":5,"title":"API Review","body":"Integration test review.","app_version":"3.6","os_version":"10.9.5","os_arch":"x86_64","device_model":"MacBookPro11,1","client_version":"0.1.7 beta"}'
+  REVIEW_UID=$(body_value '.review.uid // empty')
+  if ! status_is 200 || [ -z "$REVIEW_UID" ] || [ "${#REVIEW_UID}" -lt 16 ] || [ "${#REVIEW_UID}" -gt 32 ] || ! jq_ok '.review.app_version == "3.6" and .review.os_version == "10.9.5" and .review.os_arch == "x86_64"'; then
+    err "$NAME" Create '16-32 char review UID and stored version/system info' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request PATCH "/api/v1/reviews/$REVIEW_ID" 1 "$TOKEN" '{"rating":4,"title":"Updated","body":"Updated integration review."}'
-  if ! status_is 200 || ! jq_ok '.review.rating == 4'; then
-    err "$NAME" Update 'rating=4' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  api_request GET '/api/v1/apps/pixelmator/reviews' 0
+  if ! status_is 200 || ! jq -e --arg uid "$REVIEW_UID" '.reviews | any(.uid == $uid and .app_version == "3.6" and .author)' "$BODY_FILE" >/dev/null 2>&1; then
+    err "$NAME" PublicRead 'public UID, author and app version' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request POST "/api/v1/reviews/$REVIEW_ID/like" 1 "$TOKEN" '{}'
+  api_request PATCH "/api/v1/reviews/$REVIEW_UID" 1 "$TOKEN" '{"rating":4,"title":"Updated","body":"Updated integration review.","app_version":"3.6","os_version":"10.9.5","os_arch":"x86_64"}'
+  if ! status_is 200 || ! jq_ok '.review.rating == 4 and .review.uid'; then
+    err "$NAME" Update 'rating=4 with same public UID' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  LONG_BODY=$(awk 'BEGIN { for (i = 0; i < 301; i++) printf "x" }')
+  api_request PATCH "/api/v1/reviews/$REVIEW_UID" 1 "$TOKEN" "{"rating":4,"body":"$LONG_BODY","app_version":"3.6"}"
+  if ! status_is 400; then
+    err "$NAME" BodyLimit '400 for review body longer than 300 characters' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST "/api/v1/reviews/$REVIEW_UID/like" 1 "$TOKEN" '{}'
   if ! status_is 200 || ! jq_ok '.status == "liked"'; then
     err "$NAME" Like 'liked status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request POST "/api/v1/reviews/$REVIEW_ID/replies" 1 "$TOKEN" '{"body":"API reply"}'
+  api_request POST "/api/v1/reviews/$REVIEW_UID/replies" 1 "$TOKEN" '{"body":"API reply"}'
   if ! status_is 200 || ! jq_ok '.reply.id'; then
     err "$NAME" Reply 'reply id' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request DELETE "/api/v1/reviews/$REVIEW_ID" 1 "$TOKEN"
+  api_request DELETE "/api/v1/reviews/$REVIEW_UID" 1 "$TOKEN"
   if ! status_is 200 || ! jq_ok '.status == "deleted"'; then
     err "$NAME" Delete 'deleted status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
