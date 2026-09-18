@@ -180,8 +180,8 @@ ranking_lists() {
   fi
 
   request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=new'
-  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and .apps[0].slug == "libreoffice"'; then
-    fail "$N" NewReleases 'top 10 newest releases, newest fixture first' "$STATUS $(cat "$BODY")"; return
+  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and .apps[0].name == "API Uploaded App" and (.apps | any(.slug == "libreoffice"))'; then
+    fail "$N" NewReleases 'top 10 newest catalog uploads with the integration upload first' "$STATUS $(cat "$BODY")"; return
   fi
 
   ok "$N"
