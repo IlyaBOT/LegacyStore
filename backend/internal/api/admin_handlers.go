@@ -88,7 +88,7 @@ func (r *Router) adminRemoveRole(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminApps(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req); !ok {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
 		return
 	}
 	apps, err := r.users.ListAdminApps(req.Context(), req.URL.Query().Get("status"), intParam(req.URL.Query().Get("limit"), 50))
@@ -97,6 +97,27 @@ func (r *Router) adminApps(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"apps": apps})
+}
+
+func (r *Router) adminApp(w http.ResponseWriter, req *http.Request) {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
+		return
+	}
+	id, ok := pathID(w, req, "id")
+	if !ok {
+		return
+	}
+	app, err := r.users.GetAdminApp(req.Context(), id)
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	versions, err := r.users.ListAdminVersions(req.Context(), id)
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"app": app, "versions": versions})
 }
 
 func (r *Router) adminCreateApp(w http.ResponseWriter, req *http.Request) {
@@ -146,6 +167,8 @@ func (r *Router) adminUpdateApp(w http.ResponseWriter, req *http.Request) {
 		DeveloperName:    payload.DeveloperName,
 		Summary:          payload.Summary,
 		Description:      payload.Description,
+		WebsiteURL:       payload.WebsiteURL,
+		SourceURL:        payload.SourceURL,
 		ModerationStatus: payload.ModerationStatus,
 	}, clientIP(req), req.UserAgent())
 	if err != nil {
