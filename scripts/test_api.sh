@@ -51,6 +51,7 @@ api_request() {
   AR_SECURE=${3:-0}
   AR_TOKEN=${4:-}
   AR_DATA=${5:-}
+  AR_AGENT=${6:-LegacyStore-API-Tests/1.0}
 
   if [ "$AR_SECURE" = "1" ]; then
     AR_PROTO=https
@@ -64,6 +65,7 @@ api_request() {
       -H 'Content-Type: application/json' \
       -H "X-Forwarded-Proto: $AR_PROTO" \
       -H "Authorization: Bearer $AR_TOKEN" \
+      -H "User-Agent: $AR_AGENT" \
       --data "$AR_DATA" \
       "$BASE_URL$AR_PATH")
   else
@@ -71,6 +73,7 @@ api_request() {
       -X "$AR_METHOD" \
       -H "X-Forwarded-Proto: $AR_PROTO" \
       -H "Authorization: Bearer $AR_TOKEN" \
+      -H "User-Agent: $AR_AGENT" \
       "$BASE_URL$AR_PATH")
   fi
 
