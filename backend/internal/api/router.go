@@ -46,6 +46,7 @@ func NewRouterWithSigner(cfg config.Config, store *catalog.Store, users *account
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}", r.appDetail)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}/versions", r.appVersions)
 	r.mux.HandleFunc("GET /api/v1/apps/{slug}/reviews", r.appReviews)
+	r.mux.HandleFunc("POST /api/v1/apps/{slug}/view", r.recordAppView)
 	r.mux.HandleFunc("GET /api/v1/search", r.search)
 	r.mux.HandleFunc("GET /api/v1/download/{artifact_id}", r.download)
 	r.mux.HandleFunc("GET /api/v1/files/{artifact_id}", r.localArtifactFile)
@@ -198,6 +199,27 @@ func (r *Router) appDetail(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, app)
 }
 
+func (r *Router) recordAppView(w http.ResponseWriter, req *http.Request) {
+	if !r.requireStore(w) {
+		return
+	}
+	telemetry, acceptable := r.requestTelemetry(req)
+	if !acceptable {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ignored", "counted": false})
+		return
+	}
+	counted, err := r.store.RecordAppView(req.Context(), req.PathValue("slug"), telemetry)
+	if errors.Is(err, catalog.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "app_not_found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "view_failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "counted": counted})
+}
+
 func (r *Router) appVersions(w http.ResponseWriter, req *http.Request) {
 	if !r.requireStore(w) {
 		return
@@ -266,9 +288,6 @@ func (r *Router) download(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusInternalServerError, "download_metadata_failed")
 		return
 	}
-	// Count a download intent once when metadata is requested. Counting here
-	// avoids multiplying local downloads by HTTP range requests.
-	_ = r.store.RecordDownload(req.Context(), artifactID)
 	if metadata.SourceType == "local" {
 		metadata.DownloadURL = strings.TrimRight(r.cfg.PublicBaseURL, "/") + "/api/v1/files/" + strconv.FormatInt(artifactID, 10)
 	}
