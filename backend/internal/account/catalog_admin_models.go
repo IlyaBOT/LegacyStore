@@ -26,12 +26,9 @@ type AdminArtifact struct {
 	MinOS              string `json:"min_os"`
 	MaxSupportedOS     string `json:"max_supported_os,omitempty"`
 	MaxTestedOS        string `json:"max_tested_os,omitempty"`
-	HardBlockAboveMax  bool   `json:"hard_block_above_max"`
-	ArchI386           bool   `json:"arch_i386"`
-	ArchX8664          bool   `json:"arch_x86_64"`
-	Supports32Bit      bool   `json:"supports_32bit"`
-	Supports64Bit      bool   `json:"supports_64bit"`
-	RequiresRosetta    bool   `json:"requires_rosetta"`
+	HardBlockAboveMax  bool     `json:"hard_block_above_max"`
+	Architectures      []string `json:"architectures"`
+	RequiresRosetta    bool     `json:"requires_rosetta"`
 	RequiresJava       bool   `json:"requires_java"`
 	InstallNotes       string `json:"install_notes,omitempty"`
 	ModerationStatus   string `json:"moderation_status"`
