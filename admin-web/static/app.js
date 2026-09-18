@@ -1374,6 +1374,12 @@
       '<label class="switch-card"><input name="is_recommended" type="checkbox" value="true" checked><span><strong>Recommended build</strong><small>Prefer this release when it matches the selected Mac.</small></span></label>' +
       '<div class="form-row field-full"><label>Changelog</label><textarea name="changelog" placeholder="What changed in this release?"></textarea></div></div></section>' +
 
+      '<section class="bento-card upload-media-card"><h2>Images</h2><p class="panel-help">Optional catalog media. All files are validated and recompressed by LegacyStore before storage.</p>' +
+      '<div class="compact-field-grid"><div class="form-row field-wide"><label>Application icon</label><input name="icon_file" type="file" accept="image/jpeg,image/png,image/gif,image/svg+xml,.svg">' +
+      '<small>Optional override for the detected icon. Raster/SVG source up to 2 MB and 2048×2048; stored at up to 512×512 and 1 MB. SVG is allowed only here.</small></div>' +
+      '<div class="form-row field-full"><label>Screenshots</label><input name="screenshots" type="file" accept="image/jpeg,image/png,image/gif" multiple>' +
+      '<small>Up to 3 images, 2 MB each and no larger than 2048×2048. They are recompressed to at most 1 MB each.</small></div></div></section>' +
+
       '<section class="bento-card upload-compat-card"><h2>Compatibility</h2><p class="panel-help">Use exact patch versions when the application requires them, for example 10.6.8.</p>' +
       '<div class="compact-field-grid"><div class="form-row field-os"><label>Minimum OS X <span class="required-dot">*</span></label><input name="min_os" type="text" value="10.4" placeholder="10.6.8" required>' +
       '<small>Oldest exact system release supported.</small></div>' +
