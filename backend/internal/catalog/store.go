@@ -149,7 +149,7 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 			Views:           row.Views,
 			PopularityScore: row.PopularityScore,
 			ArchBadges:      archBadges(selected),
-			Compatibility: result,
+			Compatibility:   result,
 		}
 		if selected != nil {
 			summary.RecommendedVersion = selected.Version
