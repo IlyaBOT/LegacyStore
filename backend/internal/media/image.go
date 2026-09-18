@@ -375,7 +375,10 @@ func processSVG(raw []byte, originalName string, maxOutputSide int) (*Result, er
 						return nil, ErrUnsafeSVG
 					}
 				}
-				if name == "style" && (strings.Contains(value, "url(") || strings.Contains(value, "javascript:") || strings.Contains(value, "expression(")) {
+				if strings.Contains(value, "javascript:") || strings.Contains(value, "expression(") {
+					return nil, ErrUnsafeSVG
+				}
+				if strings.Contains(value, "url(") && !localSVGURLReference(value) {
 					return nil, ErrUnsafeSVG
 				}
 			}
@@ -413,6 +416,29 @@ func processSVG(raw []byte, originalName string, maxOutputSide int) (*Result, er
 		SHA256:           hex.EncodeToString(sum[:]),
 		OriginalFilename: originalName,
 	}, nil
+}
+
+func localSVGURLReference(value string) bool {
+	value = strings.ToLower(strings.Join(strings.Fields(value), ""))
+	if !strings.Contains(value, "url(") {
+		return true
+	}
+	for {
+		start := strings.Index(value, "url(")
+		if start < 0 {
+			return true
+		}
+		rest := value[start+4:]
+		end := strings.Index(rest, ")")
+		if end < 0 {
+			return false
+		}
+		target := strings.Trim(rest[:end], "'\"")
+		if !strings.HasPrefix(target, "#") {
+			return false
+		}
+		value = rest[end+1:]
+	}
 }
 
 func blockedSVGElement(name string) bool {
