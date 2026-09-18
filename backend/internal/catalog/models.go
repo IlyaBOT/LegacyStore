@@ -39,6 +39,7 @@ type HomeFeed struct {
 }
 
 type AppDetail struct {
+	ID                  int64                `json:"id"`
 	Slug                string               `json:"slug"`
 	Name                string               `json:"name"`
 	BundleID            string               `json:"bundle_id,omitempty"`
