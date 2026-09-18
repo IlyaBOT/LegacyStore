@@ -29,7 +29,17 @@ if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
     -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 fi
 
-docker compose up -d --build
+echo "Building backend image..."
+docker compose build backend
+
+echo "Starting PostgreSQL..."
+docker compose up -d postgres
+
+echo "Applying database migrations..."
+"$ROOT_DIR/scripts/migrate.sh"
+
+echo "Starting backend and web UI..."
+docker compose up -d backend admin-web
 
 BACKEND_PORT=${BACKEND_PORT:-8080}
 ADMIN_WEB_PORT=${ADMIN_WEB_PORT:-8081}
