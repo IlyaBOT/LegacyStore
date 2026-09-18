@@ -47,6 +47,7 @@ type AppDetail struct {
 	Description         string               `json:"description,omitempty"`
 	Category            string               `json:"category"`
 	WebsiteURL          string               `json:"website_url,omitempty"`
+	SourceURL           string               `json:"source_url,omitempty"`
 	LicenseType         string               `json:"license_type,omitempty"`
 	Icon                string               `json:"icon,omitempty"`
 	Screenshots         []Screenshot         `json:"screenshots,omitempty"`
@@ -85,8 +86,7 @@ type ArtifactResponse struct {
 	MaxTestedOS         string   `json:"max_tested_os,omitempty"`
 	HardBlockAboveMax   bool     `json:"hard_block_above_max,omitempty"`
 	Archs               []string `json:"archs"`
-	Supports32Bit       bool     `json:"supports_32bit"`
-	Supports64Bit       bool     `json:"supports_64bit"`
+	ArchitectureLabels  []string `json:"architecture_labels,omitempty"`
 	RequiresJava        bool     `json:"requires_java,omitempty"`
 	InstallNotes        string   `json:"install_notes,omitempty"`
 	CompatibilityLabel  string   `json:"compatibility_label,omitempty"`
