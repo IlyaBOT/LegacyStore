@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"legacystore/backend/internal/architecture"
 	"legacystore/backend/internal/compatibility"
 )
 
@@ -173,6 +174,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 			COALESCE(a.description, ''),
 			c.name,
 			COALESCE(a.website_url, ''),
+			COALESCE(a.source_url, ''),
 			COALESCE(a.license_type, ''),
 			COALESCE((
 				SELECT image_url
@@ -201,6 +203,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		&row.Description,
 		&row.Category,
 		&row.WebsiteURL,
+		&row.SourceURL,
 		&row.LicenseType,
 		&row.Icon,
 		&row.Rating,
@@ -244,6 +247,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		Description:   row.Description,
 		Category:      row.Category,
 		WebsiteURL:    row.WebsiteURL,
+		SourceURL:     row.SourceURL,
 		LicenseType:   row.LicenseType,
 		Icon:          row.Icon,
 		Screenshots:   screenshots,
@@ -539,9 +543,8 @@ func artifactResponse(row artifactRow) ArtifactResponse {
 		MaxSupportedOS:    row.MaxSupportedOS,
 		MaxTestedOS:       row.MaxTestedOS,
 		HardBlockAboveMax: row.HardBlockAboveMax,
-		Archs:             artifactArchs(row),
-		Supports32Bit:     row.Supports32Bit,
-		Supports64Bit:     row.Supports64Bit,
+		Archs:             append([]string(nil), row.Architectures...),
+		ArchitectureLabels: architecture.HumanLabels(row.Architectures),
 		RequiresJava:      row.RequiresJava,
 		InstallNotes:      row.InstallNotes,
 	}
@@ -552,28 +555,11 @@ func artifactResponse(row artifactRow) ArtifactResponse {
 	return resp
 }
 
-func artifactArchs(row artifactRow) []string {
-	var archs []string
-	if row.ArchI386 {
-		archs = append(archs, "i386")
-	}
-	if row.ArchX8664 {
-		archs = append(archs, "x86_64")
-	}
-	return archs
-}
-
 func archBadges(row *artifactRow) []string {
 	if row == nil {
 		return nil
 	}
-	if row.ArchI386 && row.ArchX8664 {
-		return []string{"Intel", "i386", "x86_64"}
-	}
-	if row.ArchI386 {
-		return []string{"Intel", "i386"}
-	}
-	return []string{"Intel", "x86_64"}
+	return architecture.HumanLabels(row.Architectures)
 }
 
 func normalizeFilters(filters Filters) Filters {
