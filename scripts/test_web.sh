@@ -170,8 +170,8 @@ ranking_lists() {
   N=WebRankingLists
 
   request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=popular'
-  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and .apps[0].slug == "pixelmator" and (.apps[0].popularity_score >= 0)'; then
-    fail "$N" Popular 'top 10 server-ranked popularity list, Pixelmator first in deterministic fixtures' "$STATUS $(cat "$BODY")"; return
+  if [ "$STATUS" != 200 ] || ! json '(.apps | type == "array" and length <= 10 and length > 0) and ([.apps[].popularity_score] == ([.apps[].popularity_score] | sort | reverse))'; then
+    fail "$N" Popular 'top 10 sorted by descending server-side popularity score' "$STATUS $(cat "$BODY")"; return
   fi
 
   request GET '/api/v1/apps?os=10.9.5&arch=x86_64&limit=10&page=1&sort=downloads'
