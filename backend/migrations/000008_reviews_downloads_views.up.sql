@@ -88,4 +88,76 @@ CREATE UNIQUE INDEX app_view_events_anonymous_ip_unique
 
 CREATE INDEX app_view_events_app_idx ON app_view_events (app_id, first_viewed_at DESC);
 
+CREATE VIEW app_engagement_stats AS
+WITH base AS (
+    SELECT
+        a.id AS app_id,
+        COALESCE(r.review_count, 0)::bigint AS review_count,
+        COALESCE(r.positive_review_count, 0)::bigint AS positive_review_count,
+        COALESCE(r.average_rating, 0)::double precision AS average_rating,
+        COALESCE(d.download_count, 0)::bigint AS download_count,
+        COALESCE(v.view_count, 0)::bigint AS view_count,
+        rel.latest_release_at
+    FROM apps a
+    LEFT JOIN LATERAL (
+        SELECT
+            COUNT(*) AS review_count,
+            COUNT(*) FILTER (WHERE rating >= 4) AS positive_review_count,
+            AVG(rating)::double precision AS average_rating
+        FROM reviews
+        WHERE app_id = a.id AND deleted_at IS NULL
+    ) r ON true
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS download_count
+        FROM download_events
+        WHERE app_id = a.id AND completed_at IS NOT NULL
+    ) d ON true
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS view_count
+        FROM app_view_events
+        WHERE app_id = a.id
+    ) v ON true
+    LEFT JOIN LATERAL (
+        SELECT MAX(COALESCE(release_date::timestamp, created_at)) AS latest_release_at
+        FROM app_versions
+        WHERE app_id = a.id
+    ) rel ON true
+),
+scored AS (
+    SELECT
+        base.*,
+        CASE
+            WHEN review_count = 0 THEN 0::double precision
+            ELSE (
+                (positive_review_count::double precision / review_count) + 3.8416 / (2 * review_count)
+                - 1.96 * sqrt(
+                    (
+                        (positive_review_count::double precision / review_count)
+                        * (1 - positive_review_count::double precision / review_count)
+                        + 3.8416 / (4 * review_count)
+                    ) / review_count
+                )
+            ) / (1 + 3.8416 / review_count)
+        END AS positive_wilson_score,
+        MAX(download_count) OVER () AS max_download_count
+    FROM base
+)
+SELECT
+    app_id,
+    review_count,
+    positive_review_count,
+    average_rating,
+    download_count,
+    view_count,
+    latest_release_at,
+    positive_wilson_score,
+    (
+        0.65 * positive_wilson_score
+        + 0.35 * CASE
+            WHEN max_download_count <= 0 THEN 0
+            ELSE ln(1 + download_count::double precision) / ln(1 + max_download_count::double precision)
+          END
+    )::double precision AS popularity_score
+FROM scored;
+
 COMMIT;
