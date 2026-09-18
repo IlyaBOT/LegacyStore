@@ -94,24 +94,16 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				ORDER BY sort_order, id
 				LIMIT 1
 			), '') AS hero_image,
-			COALESCE((
-				SELECT AVG(rating)::float8
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			), 0) AS rating,
-			(
-				SELECT COUNT(*)
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			) AS rating_count,
-			(
-				SELECT COUNT(*)
-				FROM download_events de
-				WHERE de.app_id = a.id
-			) AS downloads
+			COALESCE(stats.average_rating, 0) AS rating,
+			COALESCE(stats.review_count, 0) AS rating_count,
+			COALESCE(stats.positive_review_count, 0) AS positive_reviews,
+			COALESCE(stats.download_count, 0) AS downloads,
+			COALESCE(stats.view_count, 0) AS views,
+			COALESCE(stats.popularity_score, 0) AS popularity_score
 		FROM apps a
 		JOIN app_categories ac ON ac.app_id = a.id
 		JOIN categories c ON c.id = ac.category_id
+		LEFT JOIN app_engagement_stats stats ON stats.app_id = a.id
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
@@ -126,7 +118,11 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 	var apps []AppSummary
 	for rows.Next() {
 		var row appRow
-		if err := rows.Scan(&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category, &row.Icon, &row.HeroImage, &row.Rating, &row.RatingCount, &row.Downloads); err != nil {
+		if err := rows.Scan(
+			&row.ID, &row.Slug, &row.Name, &row.Summary, &row.Category,
+			&row.Icon, &row.HeroImage, &row.Rating, &row.RatingCount,
+			&row.PositiveReviews, &row.Downloads, &row.Views, &row.PopularityScore,
+		); err != nil {
 			return nil, err
 		}
 
@@ -146,10 +142,13 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 			Summary:       row.Summary,
 			Icon:          row.Icon,
 			HeroImage:     row.HeroImage,
-			Rating:        roundRating(row.Rating),
-			RatingCount:   row.RatingCount,
-			Downloads:     row.Downloads,
-			ArchBadges:    archBadges(selected),
+			Rating:          roundRating(row.Rating),
+			RatingCount:     row.RatingCount,
+			PositiveReviews: row.PositiveReviews,
+			Downloads:       row.Downloads,
+			Views:           row.Views,
+			PopularityScore: row.PopularityScore,
+			ArchBadges:      archBadges(selected),
 			Compatibility: result,
 		}
 		if selected != nil {
@@ -182,19 +181,14 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 				ORDER BY app_version_id NULLS FIRST, id
 				LIMIT 1
 			), '') AS icon,
-			COALESCE((
-				SELECT AVG(rating)::float8
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			), 0) AS rating,
-			(
-				SELECT COUNT(*)
-				FROM reviews
-				WHERE app_id = a.id AND deleted_at IS NULL
-			) AS rating_count
+			COALESCE(stats.average_rating, 0) AS rating,
+			COALESCE(stats.review_count, 0) AS rating_count,
+			COALESCE(stats.download_count, 0) AS downloads,
+			COALESCE(stats.view_count, 0) AS views
 		FROM apps a
 		JOIN app_categories ac ON ac.app_id = a.id
 		JOIN categories c ON c.id = ac.category_id
+		LEFT JOIN app_engagement_stats stats ON stats.app_id = a.id
 		WHERE a.slug = $1 AND a.moderation_status = 'approved'
 		LIMIT 1
 	`, slug).Scan(
@@ -211,6 +205,8 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		&row.Icon,
 		&row.Rating,
 		&row.RatingCount,
+		&row.Downloads,
+		&row.Views,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -244,6 +240,8 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		Screenshots:   screenshots,
 		Rating:        roundRating(row.Rating),
 		RatingCount:   row.RatingCount,
+		Downloads:     row.Downloads,
+		Views:         row.Views,
 		Versions:      versionsFromArtifacts(target, artifacts),
 		Compatibility: result,
 	}
