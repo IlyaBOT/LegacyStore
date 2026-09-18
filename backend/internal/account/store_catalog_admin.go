@@ -6,6 +6,10 @@ import (
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/lib/pq"
+
+	"legacystore/backend/internal/architecture"
 )
 
 func (s *Store) ListAdminVersions(ctx context.Context, appID int64) ([]AdminVersion, error) {
