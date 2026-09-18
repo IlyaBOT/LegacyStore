@@ -50,6 +50,7 @@ func TestInspectZipApplicationBundle(t *testing.T) {
 	<key>LSMinimumSystemVersion</key><string>10.5</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 	<key>CFBundleIconFile</key><string>Classic.icns</string>
+	<key>CFBundleExecutable</key><string>ClassicTool</string>
 	</dict></plist>`
 	entry, err := writer.Create("Classic Tool.app/Contents/Info.plist")
 	if err != nil {
@@ -68,6 +69,13 @@ func TestInspectZipApplicationBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := iconEntry.Write(append([]byte("icns-fake-container"), pngBytes.Bytes()...)); err != nil {
+		t.Fatal(err)
+	}
+	executableEntry, err := writer.Create("Classic Tool.app/Contents/MacOS/ClassicTool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executableEntry.Write(syntheticMachO64(0x01000007, 3)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,6 +107,9 @@ func TestInspectZipApplicationBundle(t *testing.T) {
 	}
 	if result.Metadata.IconWidth != 2 || result.Metadata.IconHeight != 2 {
 		t.Fatalf("icon size = %dx%d", result.Metadata.IconWidth, result.Metadata.IconHeight)
+	}
+	if len(result.Metadata.Architectures) != 1 || result.Metadata.Architectures[0] != "x86_64" {
+		t.Fatalf("architectures = %#v", result.Metadata.Architectures)
 	}
 }
 
