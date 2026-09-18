@@ -170,21 +170,27 @@ func (s *Store) CreateAdminApp(ctx context.Context, actor User, app AdminApp, ca
 
 	var created AdminApp
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO apps (slug, name, bundle_id, developer_name, summary, description, website_url, license_type, created_by, moderation_status)
-		VALUES ($1, $2, NULLIF($3, ''), $4, $5, NULLIF($6, ''), '', '', $7, $8)
-		RETURNING id, slug, name, COALESCE(bundle_id, ''), developer_name, summary, COALESCE(description, ''), moderation_status, created_at::text, updated_at::text
-	`, app.Slug, app.Name, app.BundleID, app.DeveloperName, app.Summary, app.Description, actor.ID, status).Scan(
-		&created.ID, &created.Slug, &created.Name, &created.BundleID, &created.DeveloperName, &created.Summary, &created.Description, &created.ModerationStatus, &created.CreatedAt, &created.UpdatedAt)
+		INSERT INTO apps (slug, name, bundle_id, developer_name, summary, description, website_url, source_url, license_type, created_by, moderation_status)
+		VALUES ($1, $2, NULLIF($3, ''), $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), '', $9, $10)
+		RETURNING id, slug, name, COALESCE(bundle_id, ''), developer_name, summary, COALESCE(description, ''),
+		          COALESCE(website_url, ''), COALESCE(source_url, ''), moderation_status, created_at::text, updated_at::text
+	`, app.Slug, app.Name, app.BundleID, app.DeveloperName, app.Summary, app.Description, strings.TrimSpace(app.WebsiteURL), strings.TrimSpace(app.SourceURL), actor.ID, status).Scan(
+		&created.ID, &created.Slug, &created.Name, &created.BundleID, &created.DeveloperName, &created.Summary, &created.Description,
+		&created.WebsiteURL, &created.SourceURL, &created.ModerationStatus, &created.CreatedAt, &created.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if categorySlug != "" {
-		if _, err := tx.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO app_categories (app_id, category_id)
 			SELECT $1, id FROM categories WHERE slug = $2
 			ON CONFLICT DO NOTHING
-		`, created.ID, categorySlug); err != nil {
+		`, created.ID, categorySlug)
+		if err != nil {
 			return nil, err
+		}
+		if rows, _ := result.RowsAffected(); rows == 0 {
+			return nil, ErrInvalidCredential
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -201,7 +207,6 @@ func (s *Store) CreateAdminApp(ctx context.Context, actor User, app AdminApp, ca
 	}
 	return &created, nil
 }
-
 func (s *Store) UpdateAdminApp(ctx context.Context, actor User, appID int64, app AdminApp, ip net.IP, userAgent string) (*AdminApp, error) {
 	var updated AdminApp
 	err := s.db.QueryRowContext(ctx, `
@@ -212,11 +217,15 @@ func (s *Store) UpdateAdminApp(ctx context.Context, actor User, appID int64, app
 		    developer_name = COALESCE(NULLIF($5, ''), developer_name),
 		    summary = COALESCE(NULLIF($6, ''), summary),
 		    description = COALESCE(NULLIF($7, ''), description),
-		    moderation_status = COALESCE(NULLIF($8, ''), moderation_status)
+		    website_url = COALESCE(NULLIF($8, ''), website_url),
+		    source_url = COALESCE(NULLIF($9, ''), source_url),
+		    moderation_status = COALESCE(NULLIF($10, ''), moderation_status)
 		WHERE id = $1
-		RETURNING id, slug, name, COALESCE(bundle_id, ''), developer_name, summary, COALESCE(description, ''), moderation_status, created_at::text, updated_at::text
-	`, appID, app.Slug, app.Name, app.BundleID, app.DeveloperName, app.Summary, app.Description, app.ModerationStatus).Scan(
-		&updated.ID, &updated.Slug, &updated.Name, &updated.BundleID, &updated.DeveloperName, &updated.Summary, &updated.Description, &updated.ModerationStatus, &updated.CreatedAt, &updated.UpdatedAt)
+		RETURNING id, slug, name, COALESCE(bundle_id, ''), developer_name, summary, COALESCE(description, ''),
+		          COALESCE(website_url, ''), COALESCE(source_url, ''), moderation_status, created_at::text, updated_at::text
+	`, appID, app.Slug, app.Name, app.BundleID, app.DeveloperName, app.Summary, app.Description, strings.TrimSpace(app.WebsiteURL), strings.TrimSpace(app.SourceURL), app.ModerationStatus).Scan(
+		&updated.ID, &updated.Slug, &updated.Name, &updated.BundleID, &updated.DeveloperName, &updated.Summary, &updated.Description,
+		&updated.WebsiteURL, &updated.SourceURL, &updated.ModerationStatus, &updated.CreatedAt, &updated.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -226,7 +235,6 @@ func (s *Store) UpdateAdminApp(ctx context.Context, actor User, appID int64, app
 	_ = s.audit(ctx, actor.ID, "admin.apps.update", "app", intString(appID), ip, userAgent)
 	return &updated, nil
 }
-
 func (s *Store) DeleteAdminApp(ctx context.Context, actor User, appID int64, ip net.IP, userAgent string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM apps WHERE id = $1`, appID)
 	if err != nil {
