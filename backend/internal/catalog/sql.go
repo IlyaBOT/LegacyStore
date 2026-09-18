@@ -30,6 +30,7 @@ type appDetailRow struct {
 	DeveloperName string
 	Description   string
 	WebsiteURL    string
+	SourceURL     string
 	LicenseType   string
 }
 
