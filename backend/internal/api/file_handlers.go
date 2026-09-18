@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -69,6 +70,22 @@ func (r *Router) localArtifactFile(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("X-Checksum-SHA256", metadata.SHA256)
 	}
 	w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+	w.Header().Set("Accept-Ranges", "bytes")
+
+	// Only a complete non-range GET can be proven to have transferred the whole
+	// file in this request. Range requests remain supported, but are deliberately
+	// not counted because a parser or resume probe may fetch only a fragment.
+	if req.Method == http.MethodGet && strings.TrimSpace(req.Header.Get("Range")) == "" {
+		telemetry, countable := r.requestTelemetry(req)
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+		w.WriteHeader(http.StatusOK)
+		written, copyErr := io.Copy(w, file)
+		if copyErr == nil && written == info.Size() && countable {
+			_, _ = r.store.RecordCompletedDownload(req.Context(), artifactID, telemetry)
+		}
+		return
+	}
+
 	http.ServeContent(w, req, name, info.ModTime(), file)
 }
 
