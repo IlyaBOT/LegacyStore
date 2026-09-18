@@ -139,6 +139,13 @@ SELECT a.id, sv.version, sv.release_date, sv.changelog, sv.is_recommended
 FROM seed_versions sv
 JOIN apps a ON a.slug = sv.app_slug;
 
+-- Fixtures emulate the date each release was first published to this catalog.
+-- Production uses app_versions.created_at as the "new release" ordering key.
+UPDATE app_versions
+SET created_at = release_date::timestamptz,
+    updated_at = release_date::timestamptz
+WHERE release_date IS NOT NULL;
+
 CREATE TEMP TABLE seed_artifacts (
     app_slug text NOT NULL,
     version text NOT NULL,
