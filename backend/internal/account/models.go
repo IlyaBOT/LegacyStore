@@ -112,7 +112,9 @@ type AdminApp struct {
 	Description      string `json:"description,omitempty"`
 	WebsiteURL       string `json:"website_url,omitempty"`
 	SourceURL        string `json:"source_url,omitempty"`
+	CategorySlug     string `json:"category_slug,omitempty"`
 	Category         string `json:"category,omitempty"`
+	Icon             string `json:"icon,omitempty"`
 	ModerationStatus string `json:"moderation_status"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
