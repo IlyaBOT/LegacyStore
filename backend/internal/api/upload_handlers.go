@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -10,13 +11,14 @@ import (
 	"strings"
 
 	"legacystore/backend/internal/account"
+	"legacystore/backend/internal/architecture"
 	"legacystore/backend/internal/compatibility"
 	"legacystore/backend/internal/macmeta"
 	"legacystore/backend/internal/storage"
 )
 
 func (r *Router) adminInspectUpload(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
 		return
 	}
 	if r.cfg.StorageBackend != "local" {
@@ -102,7 +104,7 @@ func (r *Router) adminInspectUpload(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminInspectAppBundle(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
 		return
 	}
 	req.Body = http.MaxBytesReader(w, req.Body, 24<<20)
@@ -156,7 +158,7 @@ func (r *Router) adminInspectAppBundle(w http.ResponseWriter, req *http.Request)
 }
 
 func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
 	if !ok {
 		return
 	}
@@ -265,6 +267,11 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	architectures, err := parseArchitectures(fields["architectures"])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_architecture")
+		return
+	}
 	artifact := account.AdminArtifact{
 		AppVersionID:      versionID,
 		FileName:          uploadedName,
@@ -277,21 +284,10 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 		MaxSupportedOS:    fields["max_supported_os"],
 		MaxTestedOS:       fields["max_tested_os"],
 		HardBlockAboveMax: parseFormBool(fields["hard_block_above_max"]),
-		ArchI386:          parseFormBool(fields["arch_i386"]),
-		ArchX8664:         parseFormBool(fields["arch_x86_64"]),
-		Supports32Bit:     parseFormBool(fields["supports_32bit"]),
-		Supports64Bit:     parseFormBool(fields["supports_64bit"]),
+		Architectures:     architectures,
 		RequiresRosetta:   parseFormBool(fields["requires_rosetta"]),
 		RequiresJava:      parseFormBool(fields["requires_java"]),
 		InstallNotes:      fields["install_notes"],
-	}
-	if !artifact.ArchI386 && !artifact.ArchX8664 {
-		writeError(w, http.StatusBadRequest, "architecture_required")
-		return
-	}
-	if !artifact.Supports32Bit && !artifact.Supports64Bit {
-		writeError(w, http.StatusBadRequest, "bitness_required")
-		return
 	}
 	if !validOSRange(artifact.MinOS, artifact.MaxSupportedOS, artifact.MaxTestedOS) {
 		writeError(w, http.StatusBadRequest, "invalid_os_range")
@@ -312,6 +308,177 @@ func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
 			"size_bytes": saved.SizeBytes,
 		},
 	})
+}
+
+func (r *Router) contributionStageUpload(w http.ResponseWriter, req *http.Request) {
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	if !ok {
+		return
+	}
+	if r.cfg.StorageBackend != "local" {
+		writeError(w, http.StatusServiceUnavailable, "local_storage_disabled")
+		return
+	}
+	appID, ok := pathID(w, req, "id")
+	if !ok {
+		return
+	}
+
+	local, err := storage.NewLocal(r.cfg.LocalStoragePath, r.cfg.MaxUploadBytes)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_unavailable")
+		return
+	}
+	req.Body = http.MaxBytesReader(w, req.Body, r.cfg.MaxUploadBytes+(2<<20))
+	reader, err := req.MultipartReader()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_multipart")
+		return
+	}
+
+	var saved *storage.SavedFile
+	var uploadedName string
+	for {
+		part, partErr := reader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if errors.Is(partErr, multipart.ErrMessageTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large")
+			return
+		}
+		if partErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid_multipart")
+			return
+		}
+		if part.FormName() != "file" {
+			_ = part.Close()
+			continue
+		}
+		if saved != nil {
+			_ = part.Close()
+			_ = local.Remove(saved.RelativePath)
+			writeError(w, http.StatusBadRequest, "multiple_files_not_allowed")
+			return
+		}
+		uploadedName = filepath.Base(part.FileName())
+		if uploadedName == "." || uploadedName == "" {
+			_ = part.Close()
+			writeError(w, http.StatusBadRequest, "invalid_file_name")
+			return
+		}
+		saved, err = local.SaveQuarantine(part, uploadedName)
+		_ = part.Close()
+		if errors.Is(err, storage.ErrTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "upload_failed")
+			return
+		}
+	}
+	if saved == nil {
+		writeError(w, http.StatusBadRequest, "file_required")
+		return
+	}
+
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = local.Remove(saved.RelativePath)
+		}
+	}()
+
+	absolute, err := local.Resolve(saved.RelativePath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_unavailable")
+		return
+	}
+	inspection := macmeta.InspectFile(req.Context(), absolute, uploadedName)
+	warnings, _ := json.Marshal(inspection.Warnings)
+
+	stage, err := r.users.CreateStagedUpload(req.Context(), *actor, account.StageUploadInput{
+		AppID:                 appID,
+		SubmittedBy:           actor.ID,
+		OriginalFilename:      uploadedName,
+		StoragePath:           saved.RelativePath,
+		SHA256:                saved.SHA256,
+		SizeBytes:             saved.SizeBytes,
+		PackageType:           packageTypeFromName(uploadedName),
+		DetectedName:          inspection.Metadata.Name,
+		DetectedBundleID:      inspection.Metadata.BundleID,
+		DetectedVersion:       inspection.Metadata.Version,
+		DetectedCategorySlug:  inspection.Metadata.CategorySlug,
+		DetectedMinOS:         inspection.Metadata.MinimumOS,
+		DetectedArchitectures: inspection.Metadata.Architectures,
+		Warnings:              warnings,
+	}, clientIP(req), req.UserAgent())
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	cleanup = false
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"stage":      stage,
+		"inspection": inspection,
+	})
+}
+
+func (r *Router) contributionStagedUpload(w http.ResponseWriter, req *http.Request) {
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	if !ok {
+		return
+	}
+	stage, err := r.users.GetStagedUpload(req.Context(), *actor, req.PathValue("uid"))
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"stage": stage})
+}
+
+func (r *Router) contributionCommitUpload(w http.ResponseWriter, req *http.Request) {
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	if !ok {
+		return
+	}
+	var payload account.ReleaseSubmission
+	if !decodeJSON(w, req, &payload) {
+		return
+	}
+	if strings.TrimSpace(payload.Version) == "" {
+		writeError(w, http.StatusBadRequest, "version_required")
+		return
+	}
+	if strings.TrimSpace(payload.MinOS) == "" {
+		writeError(w, http.StatusBadRequest, "minimum_os_required")
+		return
+	}
+	normalized, err := architecture.Normalize(payload.Architectures)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_architecture")
+		return
+	}
+	payload.Architectures = normalized
+	if !validOSRange(payload.MinOS, payload.MaxSupportedOS, payload.MaxTestedOS) {
+		writeError(w, http.StatusBadRequest, "invalid_os_range")
+		return
+	}
+
+	result, err := r.users.CommitStagedUpload(req.Context(), *actor, req.PathValue("uid"), payload, clientIP(req), req.UserAgent())
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"release": result})
+}
+
+func parseArchitectures(value string) ([]string, error) {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n'
+	})
+	return architecture.Normalize(parts)
 }
 
 func validOSRange(minOS, maxSupportedOS, maxTestedOS string) bool {
