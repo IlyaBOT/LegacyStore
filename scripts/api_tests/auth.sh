@@ -2,6 +2,7 @@
 
 run_auth_tests() {
   test_register_session_profile
+  test_avatar_upload
   test_two_factor
   test_legacy_scopes_and_revocation
   test_reviews
@@ -32,6 +33,56 @@ test_register_session_profile() {
   api_request GET '/api/v1/me/sessions' 1 "$TOKEN"
   if ! status_is 200 || ! jq_ok '.sessions | type == "array" and length > 0 and all(.auth_kind == "web")'; then
     err "$NAME" Sessions 'web session list' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  ok "$NAME"
+}
+
+test_avatar_upload() {
+  NAME='AvatarUpload'
+  if ! command -v python3 >/dev/null 2>&1; then
+    normal "$NAME"
+    return
+  fi
+  register_user avatar
+  if ! status_is 200 || [ -z "$REGISTER_TOKEN" ]; then
+    err "$NAME" Register 200 "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  TOKEN=$REGISTER_TOKEN
+
+  AVATAR_FILE="$TMP_DIR/avatar-900x700.png"
+  make_test_png "$AVATAR_FILE" 900 700 || { normal "$NAME"; return; }
+  image_upload_request '/api/v1/me/avatar' "$TOKEN" -F "file=@$AVATAR_FILE;type=image/png"
+  AVATAR_URL=$(body_value '.avatar.url // empty')
+  if ! status_is 200 || [ -z "$AVATAR_URL" ] || ! jq_ok '.avatar.width <= 512 and .avatar.height <= 512 and .avatar.size_bytes <= 1048576'; then
+    err "$NAME" ResizeCompress 'avatar <=512x512 and <=1MiB' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/me' 1 "$TOKEN"
+  if ! status_is 200 || ! jq_ok '.user.avatar_url | startswith("/api/v1/images/")'; then
+    err "$NAME" ProfileURL 'stored local avatar URL' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "$AVATAR_URL" 0
+  if ! status_is 200 || ! grep -Eiq '^Content-Type:[[:space:]]*image/(jpeg|png)' "$HEADERS_FILE"; then
+    err "$NAME" PublicImage 'public processed avatar bytes with image content type' "$(cat "$STATUS_FILE") $(cat "$HEADERS_FILE")"
+    return
+  fi
+
+  TOO_WIDE="$TMP_DIR/avatar-2049x8.png"
+  make_test_png "$TOO_WIDE" 2049 8 || { normal "$NAME"; return; }
+  image_upload_request '/api/v1/me/avatar' "$TOKEN" -F "file=@$TOO_WIDE;type=image/png"
+  if ! status_is 422 || ! jq_ok '.error == "image_dimensions_too_large"'; then
+    err "$NAME" SourceDimensions '422 for source over 2048 pixels on one side' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request DELETE '/api/v1/me/avatar' 1 "$TOKEN"
+  if ! status_is 200 || ! jq_ok '.status == "deleted"'; then
+    err "$NAME" Delete 'avatar deletion' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
   ok "$NAME"
@@ -233,6 +284,42 @@ test_reviews() {
   if ! status_is 400; then
     err "$NAME" BodyLimit '400 for review body longer than 300 characters' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    REVIEW_IMG1="$TMP_DIR/review-1.png"
+    REVIEW_IMG2="$TMP_DIR/review-2.png"
+    REVIEW_IMG3="$TMP_DIR/review-3.png"
+    REVIEW_IMG4="$TMP_DIR/review-4.png"
+    make_test_png "$REVIEW_IMG1" 1200 800
+    make_test_png "$REVIEW_IMG2" 1024 768
+    make_test_png "$REVIEW_IMG3" 640 480
+    make_test_png "$REVIEW_IMG4" 400 300
+
+    image_upload_request "/api/v1/reviews/$REVIEW_UID/images" "$TOKEN"       -F "images=@$REVIEW_IMG1;type=image/png"       -F "images=@$REVIEW_IMG2;type=image/png"       -F "images=@$REVIEW_IMG3;type=image/png"
+    REVIEW_IMAGE_URL=$(body_value '.images[0].url // empty')
+    if ! status_is 201 || [ -z "$REVIEW_IMAGE_URL" ] || ! jq_ok '.images | length == 3 and all(.size_bytes <= 1048576 and .width <= 2048 and .height <= 2048)'; then
+      err "$NAME" Images 'three compressed review images' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+      return
+    fi
+
+    image_upload_request "/api/v1/reviews/$REVIEW_UID/images" "$TOKEN" -F "images=@$REVIEW_IMG4;type=image/png"
+    if ! status_is 400 || ! jq_ok '.error == "review_image_limit"'; then
+      err "$NAME" ImageLimit 'fourth image rejected' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+      return
+    fi
+
+    api_request GET '/api/v1/apps/pixelmator/reviews' 0
+    if ! status_is 200 || ! jq -e --arg uid "$REVIEW_UID" '.reviews | any(.uid == $uid and (.images | length == 3))' "$BODY_FILE" >/dev/null 2>&1; then
+      err "$NAME" ImageReadback 'review exposes three image URLs' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+      return
+    fi
+
+    api_request GET "$REVIEW_IMAGE_URL" 0
+    if ! status_is 200 || ! grep -Eiq '^Content-Type:[[:space:]]*image/jpeg' "$HEADERS_FILE"; then
+      err "$NAME" ImageServing 'review image served as recompressed JPEG' "$(cat "$STATUS_FILE") $(cat "$HEADERS_FILE")"
+      return
+    fi
   fi
 
   api_request POST "/api/v1/reviews/$REVIEW_UID/like" 1 "$TOKEN" '{}'
