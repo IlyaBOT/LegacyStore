@@ -239,6 +239,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 	}
 
 	detail := &AppDetail{
+		ID:            row.ID,
 		Slug:          row.Slug,
 		Name:          row.Name,
 		BundleID:      row.BundleID,
