@@ -49,12 +49,12 @@ ALTER TABLE download_events
     ADD CONSTRAINT download_events_os_arch_check CHECK (os_arch IS NULL OR os_arch IN ('i386', 'x86_64'));
 
 CREATE UNIQUE INDEX download_events_logged_unique
-    ON download_events (artifact_id, user_id)
-    WHERE user_id IS NOT NULL AND completed_at IS NOT NULL;
+    ON download_events (app_version_id, user_id)
+    WHERE user_id IS NOT NULL AND app_version_id IS NOT NULL AND completed_at IS NOT NULL;
 
 CREATE UNIQUE INDEX download_events_anonymous_ip_unique
-    ON download_events (artifact_id, ip_address)
-    WHERE user_id IS NULL AND ip_address IS NOT NULL AND completed_at IS NOT NULL;
+    ON download_events (app_version_id, ip_address)
+    WHERE user_id IS NULL AND app_version_id IS NOT NULL AND ip_address IS NOT NULL AND completed_at IS NOT NULL;
 
 CREATE INDEX download_events_completed_app_idx
     ON download_events (app_id, completed_at DESC)
@@ -118,7 +118,7 @@ WITH base AS (
         WHERE app_id = a.id
     ) v ON true
     LEFT JOIN LATERAL (
-        SELECT MAX(COALESCE(release_date::timestamp, created_at)) AS latest_release_at
+        SELECT MAX(created_at) AS latest_release_at
         FROM app_versions
         WHERE app_id = a.id
     ) rel ON true
