@@ -1,5 +1,11 @@
 package compatibility
 
+import (
+	"strings"
+
+	"legacystore/backend/internal/architecture"
+)
+
 type Target struct {
 	OSVersion string
 	Arch      string
@@ -13,10 +19,7 @@ type Artifact struct {
 	MaxSupportedOS    string
 	MaxTestedOS       string
 	HardBlockAboveMax bool
-	ArchI386          bool
-	ArchX8664         bool
-	Supports32Bit     bool
-	Supports64Bit     bool
+	Architectures     []string
 	RequiresRosetta   bool
 	RequiresJava      bool
 }
@@ -66,24 +69,17 @@ func Evaluate(target Target, artifact Artifact) Result {
 		}
 	}
 
-	switch target.Arch {
-	case "i386":
-		if !artifact.ArchI386 {
-			reasons = append(reasons, reason("arch_mismatch", "Архитектура вашего Mac i386 не поддерживается. Требуется: x86_64."))
+	if len(artifact.Architectures) == 0 {
+		reasons = append(reasons, reason("unknown_compatibility", "Для сборки не указана архитектура процессора."))
+	} else if !architecture.Compatible(target.Arch, artifact.Architectures, osVersion.Supports32BitApps()) {
+		required := strings.Join(architecture.HumanLabels(artifact.Architectures), ", ")
+		if required == "" {
+			required = strings.Join(artifact.Architectures, ", ")
 		}
-		if !artifact.Supports32Bit {
-			reasons = append(reasons, reason("requires_64bit", "Продукт требует 64-битную систему."))
-		}
-	case "x86_64":
-		if !artifact.ArchX8664 {
-			reasons = append(reasons, reason("arch_mismatch", "Архитектура вашего Mac x86_64 не поддерживается. Требуется: i386."))
-		}
-	default:
-		reasons = append(reasons, reason("arch_mismatch", "Архитектура вашего Mac не поддерживается."))
-	}
-
-	if !osVersion.Supports32BitApps() && !artifact.Supports64Bit {
-		reasons = append(reasons, reason("requires_32bit", "Продукт является 32-битным, а macOS 10.15 поддерживает только 64-битные приложения."))
+		reasons = append(reasons, reason(
+			"arch_mismatch",
+			"Архитектура вашего Mac "+target.Arch+" не поддерживается этой сборкой. Требуется: "+required+".",
+		))
 	}
 
 	if artifact.RequiresRosetta {
@@ -154,7 +150,7 @@ func reason(code, message string) Reason {
 func hasBlockingReason(reasons []Reason) bool {
 	for _, r := range reasons {
 		switch r.Code {
-		case "os_too_old", "os_too_new", "arch_mismatch", "bitness_mismatch", "requires_32bit", "requires_64bit", "requires_rosetta", "unknown_compatibility":
+		case "os_too_old", "os_too_new", "arch_mismatch", "requires_rosetta", "unknown_compatibility":
 			return true
 		}
 	}
