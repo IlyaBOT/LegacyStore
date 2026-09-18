@@ -87,6 +87,11 @@ func TestSVGIconSanitizedAndScaled(t *testing.T) {
 	if _, err := Process(strings.NewReader(tooLarge), "too-large.svg", IconPolicy()); !errorsIs(err, ErrDimensionsTooLarge) {
 		t.Fatalf("oversized SVG error = %v, want ErrDimensionsTooLarge", err)
 	}
+
+	externalPaint := `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="url(https://example.invalid/paint.svg#x)"/></svg>`
+	if _, err := Process(strings.NewReader(externalPaint), "external.svg", IconPolicy()); !errorsIs(err, ErrUnsafeSVG) {
+		t.Fatalf("external SVG URL error = %v, want ErrUnsafeSVG", err)
+	}
 }
 
 func errorsIs(err, target error) bool {
