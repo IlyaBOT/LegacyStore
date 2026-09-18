@@ -226,6 +226,15 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		return nil, err
 	}
 
+	versions := versionsFromArtifacts(target, artifacts)
+	versionDownloads, err := s.VersionDownloadCounts(ctx, row.ID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range versions {
+		versions[i].Downloads = versionDownloads[versions[i].Version]
+	}
+
 	detail := &AppDetail{
 		Slug:          row.Slug,
 		Name:          row.Name,
@@ -242,7 +251,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		RatingCount:   row.RatingCount,
 		Downloads:     row.Downloads,
 		Views:         row.Views,
-		Versions:      versionsFromArtifacts(target, artifacts),
+		Versions:      versions,
 		Compatibility: result,
 	}
 	if selected != nil {
@@ -269,7 +278,15 @@ func (s *Store) Versions(ctx context.Context, slug string, target compatibility.
 	if err != nil {
 		return nil, err
 	}
-	return versionsFromArtifacts(target, artifacts), nil
+	versions := versionsFromArtifacts(target, artifacts)
+	counts, err := s.VersionDownloadCounts(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range versions {
+		versions[i].Downloads = counts[versions[i].Version]
+	}
+	return versions, nil
 }
 
 func (s *Store) Download(ctx context.Context, artifactID int64, target compatibility.Target) (*DownloadMetadata, error) {
@@ -307,15 +324,23 @@ func (s *Store) Reviews(ctx context.Context, slug string) ([]Review, error) {
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.id,
+		SELECT r.public_uid,
 		       r.user_id,
 		       COALESCE(NULLIF(u.nickname, ''), u.email) AS author,
+		       COALESCE(u.avatar_url, '') AS avatar_url,
 		       r.rating,
 		       COALESCE(r.title, ''),
 		       COALESCE(r.body, ''),
+		       COALESCE(r.app_version, ''),
+		       COALESCE(r.os_version, ''),
+		       COALESCE(r.os_arch, ''),
+		       COALESCE(r.device_model, ''),
+		       COALESCE(r.client_version, ''),
+		       r.source,
 		       (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS likes,
 		       (SELECT COUNT(*) FROM review_replies rr WHERE rr.review_id = r.id AND rr.deleted_at IS NULL) AS replies,
-		       r.created_at::text
+		       r.created_at::text,
+		       r.updated_at::text
 		FROM reviews r
 		JOIN users u ON u.id = r.user_id
 		WHERE r.app_id = $1 AND r.deleted_at IS NULL
@@ -330,7 +355,12 @@ func (s *Store) Reviews(ctx context.Context, slug string) ([]Review, error) {
 	reviews := make([]Review, 0)
 	for rows.Next() {
 		var review Review
-		if err := rows.Scan(&review.ID, &review.UserID, &review.Author, &review.Rating, &review.Title, &review.Body, &review.Likes, &review.Replies, &review.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&review.UID, &review.UserID, &review.Author, &review.AvatarURL,
+			&review.Rating, &review.Title, &review.Body, &review.AppVersion,
+			&review.OSVersion, &review.OSArch, &review.DeviceModel, &review.ClientVersion,
+			&review.Source, &review.Likes, &review.Replies, &review.CreatedAt, &review.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		reviews = append(reviews, review)
