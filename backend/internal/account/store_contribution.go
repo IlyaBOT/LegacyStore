@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 	"strings"
-	"time"
 
 	"github.com/lib/pq"
 
@@ -142,6 +141,8 @@ func (s *Store) CommitStagedUpload(ctx context.Context, actor User, uid string, 
 		       COALESCE(committed_at::text, ''), created_at::text, updated_at::text
 		FROM staged_uploads
 		WHERE public_uid = $1
+		  AND status = 'staged'
+		  AND expires_at > now()
 		FOR UPDATE
 	`, strings.TrimSpace(uid))
 	staged, err := scanStagedUpload(row)
@@ -154,14 +155,6 @@ func (s *Store) CommitStagedUpload(ctx context.Context, actor User, uid string, 
 	if staged.SubmittedBy != actor.ID && !HasRole(actor, "moder", "admin") {
 		return nil, ErrForbidden
 	}
-	if staged.Status != "staged" {
-		return nil, ErrInvalidCredential
-	}
-	expiresAt, err := time.Parse(time.RFC3339Nano, staged.ExpiresAt)
-	if err == nil && time.Now().After(expiresAt) {
-		return nil, ErrInvalidCredential
-	}
-
 	var versionID int64
 	err = tx.QueryRowContext(ctx, `
 		WITH inserted AS (
