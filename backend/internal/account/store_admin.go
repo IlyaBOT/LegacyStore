@@ -134,7 +134,7 @@ func (s *Store) ListAdminApps(ctx context.Context, status string, limit int) ([]
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT a.id, a.slug, a.name, COALESCE(a.bundle_id, ''), a.developer_name, a.summary, COALESCE(a.description, ''),
-		       COALESCE(c.name, ''), a.moderation_status, a.created_at::text, a.updated_at::text
+		       COALESCE(a.website_url, ''), COALESCE(a.source_url, ''), COALESCE(c.name, ''), a.moderation_status, a.created_at::text, a.updated_at::text
 		FROM apps a
 		LEFT JOIN app_categories ac ON ac.app_id = a.id
 		LEFT JOIN categories c ON c.id = ac.category_id
@@ -149,7 +149,7 @@ func (s *Store) ListAdminApps(ctx context.Context, status string, limit int) ([]
 	var apps []AdminApp
 	for rows.Next() {
 		var app AdminApp
-		if err := rows.Scan(&app.ID, &app.Slug, &app.Name, &app.BundleID, &app.DeveloperName, &app.Summary, &app.Description, &app.Category, &app.ModerationStatus, &app.CreatedAt, &app.UpdatedAt); err != nil {
+		if err := rows.Scan(&app.ID, &app.Slug, &app.Name, &app.BundleID, &app.DeveloperName, &app.Summary, &app.Description, &app.WebsiteURL, &app.SourceURL, &app.Category, &app.ModerationStatus, &app.CreatedAt, &app.UpdatedAt); err != nil {
 			return nil, err
 		}
 		apps = append(apps, app)
@@ -341,7 +341,7 @@ func (s *Store) AuditLog(ctx context.Context) ([]map[string]string, error) {
 
 func validRole(role string) bool {
 	switch role {
-	case "guest", "user", "trusted", "moder", "admin":
+	case "guest", "user", "uploader", "trusted", "moder", "admin":
 		return true
 	default:
 		return false
