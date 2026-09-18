@@ -100,7 +100,7 @@ func (r *Router) adminApps(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateApp(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
 	if !ok {
 		return
 	}
@@ -115,6 +115,8 @@ func (r *Router) adminCreateApp(w http.ResponseWriter, req *http.Request) {
 		DeveloperName:    payload.DeveloperName,
 		Summary:          payload.Summary,
 		Description:      payload.Description,
+		WebsiteURL:       payload.WebsiteURL,
+		SourceURL:        payload.SourceURL,
 		ModerationStatus: payload.ModerationStatus,
 	}, payload.CategorySlug, clientIP(req), req.UserAgent())
 	if err != nil {
