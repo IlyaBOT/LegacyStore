@@ -685,8 +685,9 @@
         compatibilityPill(app.compatibility) + '</div></div><div class="detail-actions"><button class="blue-button" id="downloadButton" type="button"' +
         (!artifact.id || blocked ? " disabled" : "") + '>Download</button><button class="metal-button" data-route="catalog" type="button">Back to Catalog</button></div></section>' +
         '<div class="detail-grid"><section class="detail-copy"><h2>Description</h2><p>' + escapeHTML(app.description || "") + '</p>' + screenshotStrip(app) +
-        compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app.slug) + '</section><aside class="side-box"><h2>Information</h2>' +
+        compatibilityBlock(app.compatibility) + versionsTable(app.versions || [], app) + reviewsHTML(app) + '</section><aside class="side-box"><h2>Information</h2>' +
         infoRow("Category", app.category) + infoRow("Version", artifact.version) + infoRow("Size", formatSize(artifact.size_bytes)) + infoRow("Package", artifact.package_type) +
+        infoRow("Downloads", app.downloads) + infoRow("Unique views", app.views) +
         artifactSystemRequirementsHTML(artifact) + infoRow("Minimum macOS", artifact.min_os) + infoRow("Maximum supported", artifact.max_supported_os) +
         infoRow("SHA-256", artifact.sha256) + '</aside></div>';
       bindRouteButtons(main);
@@ -697,6 +698,7 @@
         button.addEventListener("click", function () { loadDownloadMetadata(artifact.id, app.name, artifact.version); });
       }
       loadReviews(app.slug);
+      jsonRequest("POST", "/apps/" + encodeURIComponent(app.slug) + "/view", {}).catch(function () {});
       setStatus("Showing: " + app.name, "1 item", "Version: " + (artifact.version || ""));
       renderSidebar();
     }).catch(renderError);
@@ -710,12 +712,31 @@
     });
   }
 
-  function reviewsHTML(slug) {
-    var form = state.currentUser ? '<form id="reviewForm" class="review-form" data-slug="' + escapeHTML(slug) + '"><h2>Your Review</h2>' +
-      '<div class="filter-bar"><select name="rating" aria-label="Rating"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>' +
-      '<input name="title" type="text" placeholder="Title"></div><div class="form-row"><label>Review</label><textarea name="body" required></textarea></div>' +
+  function reviewsHTML(app) {
+    var versions = (app.versions || []).map(function (version) { return version.version; });
+    var versionOptions = '<option value="">Unknown / not installed</option>' + versions.map(function (version) {
+      return '<option value="' + escapeHTML(version) + '">' + escapeHTML(version) + '</option>';
+    }).join("");
+    var form = state.currentUser ? '<form id="reviewForm" class="review-form" data-slug="' + escapeHTML(app.slug) + '"><h2>Your Review</h2>' +
+      '<div class="compact-field-grid"><div class="form-row field-version"><label>Rating</label><select name="rating" aria-label="Rating">' +
+      '<option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>' +
+      '<div class="form-row field-medium"><label>Application version</label><select name="app_version">' + versionOptions + '</select>' +
+      '<small>Select the version you actually used.</small></div>' +
+      '<div class="form-row field-wide"><label>Title</label><input name="title" type="text" maxlength="120" placeholder="Short summary"></div></div>' +
+      '<div class="form-row"><label>Review</label><textarea name="body" maxlength="300" placeholder="Up to 300 characters" required></textarea>' +
+      '<small>Maximum 300 characters. Browser/OS information is recorded only when available.</small></div>' +
       '<button class="blue-button" type="submit">Post Review</button><div id="reviewNotice" class="form-message"></div></form>' : "";
     return '<section class="reviews-section">' + form + '<h2>Reviews</h2><div id="reviewsList" class="loading">Loading...</div></section>';
+  }
+
+  function reviewContextLine(review) {
+    var parts = [];
+    if (review.app_version) { parts.push("App " + review.app_version); }
+    if (review.os_version) { parts.push("OS X " + review.os_version); }
+    if (review.os_arch) { parts.push(review.os_arch); }
+    if (review.device_model) { parts.push(review.device_model); }
+    if (review.client_version) { parts.push("LegacyStore " + review.client_version); }
+    return parts.join(" · ");
   }
 
   function loadReviews(slug) {
@@ -735,16 +756,24 @@
     }
     api("/apps/" + encodeURIComponent(slug) + "/reviews").then(function (payload) {
       var reviews = payload.reviews || [];
-      target.innerHTML = reviews.length ? '<ul class="setting-list">' + reviews.map(function (review) {
-        return '<li><span><strong>' + escapeHTML(review.author || "User") + '</strong> ' + ratingDots(review.rating) + '<br>' + escapeHTML(review.title || "") +
-          '<br><small>' + escapeHTML(review.body || "") + '</small></span><span>' + escapeHTML(review.likes || 0) + ' likes' +
-          (state.currentUser ? ' <button class="metal-button small-action" data-like-review="' + escapeHTML(review.id) + '" type="button">Like</button>' : "") + '</span></li>';
+      target.innerHTML = reviews.length ? '<ul class="setting-list review-list">' + reviews.map(function (review) {
+        var context = reviewContextLine(review);
+        var avatar = review.avatar_url ?
+          '<img class="review-avatar" src="' + escapeHTML(review.avatar_url) + '" alt="">' :
+          '<span class="review-avatar review-avatar-fallback">' + escapeHTML((review.author || "U").slice(0, 1).toUpperCase()) + '</span>';
+        return '<li><span class="review-main">' + avatar + '<span><strong>' + escapeHTML(review.author || "User") + '</strong> ' + ratingDots(review.rating) +
+          (context ? '<br><small class="review-context">' + escapeHTML(context) + '</small>' : "") +
+          '<br>' + escapeHTML(review.title || "") + '<br><small>' + escapeHTML(review.body || "") + '</small></span></span><span>' +
+          escapeHTML(review.likes || 0) + ' likes' +
+          (state.currentUser ? ' <button class="metal-button small-action" data-like-review="' + escapeHTML(review.uid || "") + '" type="button">Like</button>' : "") +
+          '</span></li>';
       }).join("") + "</ul>" : '<div class="empty-state compact">No reviews</div>';
       target.querySelectorAll("[data-like-review]").forEach(function (button) {
         button.addEventListener("click", function () {
           jsonRequest("POST", "/reviews/" + encodeURIComponent(button.getAttribute("data-like-review")) + "/like", {}).then(function () { loadReviews(slug); });
         });
       });
+      bindImageFallbacks(target);
     }).catch(function () { target.innerHTML = '<div class="empty-state compact">Unable to load reviews</div>'; });
   }
 
