@@ -18,24 +18,24 @@ type adminVersionPayload struct {
 }
 
 type adminArtifactPayload struct {
-	FileName           string `json:"file_name"`
-	PackageType        string `json:"package_type"`
-	SourceType         string `json:"source_type"`
-	StoragePath        string `json:"storage_path"`
-	PrimaryDownloadURL string `json:"primary_download_url"`
-	TorrentURL         string `json:"torrent_url"`
-	MagnetURL          string `json:"magnet_url"`
-	SizeBytes          int64  `json:"size_bytes"`
-	SHA256             string `json:"sha256"`
-	MinOS              string `json:"min_os"`
-	MaxSupportedOS     string `json:"max_supported_os"`
-	MaxTestedOS        string `json:"max_tested_os"`
-	HardBlockAboveMax bool     `json:"hard_block_above_max"`
-	Architectures     []string `json:"architectures"`
-	RequiresRosetta   bool     `json:"requires_rosetta"`
-	RequiresJava      bool     `json:"requires_java"`
-	InstallNotes      string   `json:"install_notes"`
-	ModerationStatus   string `json:"moderation_status"`
+	FileName           string   `json:"file_name"`
+	PackageType        string   `json:"package_type"`
+	SourceType         string   `json:"source_type"`
+	StoragePath        string   `json:"storage_path"`
+	PrimaryDownloadURL string   `json:"primary_download_url"`
+	TorrentURL         string   `json:"torrent_url"`
+	MagnetURL          string   `json:"magnet_url"`
+	SizeBytes          int64    `json:"size_bytes"`
+	SHA256             string   `json:"sha256"`
+	MinOS              string   `json:"min_os"`
+	MaxSupportedOS     string   `json:"max_supported_os"`
+	MaxTestedOS        string   `json:"max_tested_os"`
+	HardBlockAboveMax  bool     `json:"hard_block_above_max"`
+	Architectures      []string `json:"architectures"`
+	RequiresRosetta    bool     `json:"requires_rosetta"`
+	RequiresJava       bool     `json:"requires_java"`
+	InstallNotes       string   `json:"install_notes"`
+	ModerationStatus   string   `json:"moderation_status"`
 }
 
 type adminMirrorPayload struct {
