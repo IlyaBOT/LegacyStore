@@ -29,9 +29,17 @@ ALTER TABLE artifacts
 
 ALTER TABLE apps DROP COLUMN IF EXISTS source_url;
 
-DELETE FROM roles
-WHERE name = 'uploader'
-  AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.role_id = roles.id);
+INSERT INTO user_roles (user_id, role_id)
+SELECT ur.user_id, trusted.id
+FROM user_roles ur
+JOIN roles uploader ON uploader.id = ur.role_id AND uploader.name = 'uploader'
+JOIN roles trusted ON trusted.name = 'trusted'
+ON CONFLICT DO NOTHING;
+
+DELETE FROM user_roles
+WHERE role_id = (SELECT id FROM roles WHERE name = 'uploader');
+
+DELETE FROM roles WHERE name = 'uploader';
 
 ALTER TABLE roles DROP CONSTRAINT IF EXISTS roles_name_check;
 ALTER TABLE roles
