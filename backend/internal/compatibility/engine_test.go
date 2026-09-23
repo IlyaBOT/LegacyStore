@@ -36,7 +36,7 @@ func TestEvaluateUntestedNewerOS(t *testing.T) {
 		MinOS:          "10.8",
 		MaxSupportedOS: "10.13",
 		MaxTestedOS:    "10.13",
-		Architectures: []string{"x86_64"},
+		Architectures:  []string{"x86_64"},
 	})
 	if result.Status != "untested" {
 		t.Fatalf("expected untested, got %#v", result)
@@ -58,7 +58,7 @@ func TestEvaluateOSSeriesAllowsPatchLevelMaximumWithinSameRelease(t *testing.T) 
 		MinOS:             "10.5",
 		MaxSupportedOS:    "10.6.2",
 		HardBlockAboveMax: true,
-		Architectures: []string{"i386", "x86_64"},
+		Architectures:     []string{"i386", "x86_64"},
 	})
 	if result.Status == "blocked" {
 		t.Fatalf("10.6 catalog series must include artifacts supporting only part of 10.6.x, got %#v", result)
