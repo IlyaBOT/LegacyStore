@@ -15,7 +15,7 @@
     twoFactorSetup: null,
     recoveryCodes: [],
     carouselTimer: null,
-    uploadContext: { appId: "", versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" }
+    uploadContext: { appId: "", versionId: "", stageUid: "", stage: null, file: null, inspection: null, iconDataURL: "" }
   };
 
   var main = document.getElementById("main");
@@ -1337,7 +1337,7 @@
   
 function renderUploads() {
     if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
-    state.uploadContext = { appId: "", versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" };
+    state.uploadContext = { appId: "", versionId: "", stageUid: "", stage: null, file: null, inspection: null, iconDataURL: "" };
     main.innerHTML =
       '<div class="view-title upload-page-title"><div><h1>Create Application</h1>' +
       '<p class="view-subtitle">Create the catalog page first. Releases and binaries are uploaded separately from the application page.</p></div></div>' +
@@ -1525,7 +1525,7 @@ function renderUploads() {
 
   function renderUploadVersion(appId) {
     if (!canUpload(state.currentUser)) { routeTo("profile"); return; }
-    state.uploadContext = { appId: String(appId), versionId: "", stageUid: "", file: null, inspection: null, iconDataURL: "" };
+    state.uploadContext = { appId: String(appId), versionId: "", stageUid: "", stage: null, file: null, inspection: null, iconDataURL: "" };
     main.innerHTML = '<div class="loading">Loading application...</div>';
     api("/admin/apps/" + encodeURIComponent(appId)).then(function (payload) {
       renderReleaseUploadStepOne(payload.app || {});
@@ -1625,6 +1625,7 @@ function renderUploads() {
 
     function resetInspection() {
       state.uploadContext.stageUid = "";
+      state.uploadContext.stage = null;
       state.uploadContext.inspection = null;
       state.uploadContext.iconDataURL = "";
       var results = document.getElementById("inspectionResults");
@@ -1673,6 +1674,7 @@ function renderUploads() {
       formData.append("file", file, file.name);
       api("/contributions/apps/" + encodeURIComponent(app.id) + "/stage", { method: "POST", body: formData }).then(function (payload) {
         state.uploadContext.stageUid = payload.stage && payload.stage.uid ? payload.stage.uid : "";
+        state.uploadContext.stage = payload.stage || null;
         state.uploadContext.inspection = payload.inspection || {};
         state.uploadContext.iconDataURL = payload.inspection && payload.inspection.metadata ? payload.inspection.metadata.icon_data_url || "" : "";
         showReleaseInspectionResult(payload.stage || {}, payload.inspection || {});
@@ -1688,18 +1690,8 @@ function renderUploads() {
     });
 
     continueButton.addEventListener("click", function () {
-      if (!state.uploadContext.stageUid) { return; }
-      renderReleaseMetadataStep(app, {
-        uid: state.uploadContext.stageUid,
-        original_filename: state.uploadContext.file ? state.uploadContext.file.name : "",
-        size_bytes: state.uploadContext.file ? state.uploadContext.file.size : 0,
-        sha256: ""
-      }, state.uploadContext.inspection || {});
-      api("/contributions/uploads/" + encodeURIComponent(state.uploadContext.stageUid)).then(function (payload) {
-        if (payload && payload.stage && document.getElementById("releaseMetadataForm")) {
-          renderReleaseMetadataStep(app, payload.stage, state.uploadContext.inspection || {});
-        }
-      }).catch(function () {});
+      if (!state.uploadContext.stageUid || !state.uploadContext.stage) { return; }
+      renderReleaseMetadataStep(app, state.uploadContext.stage, state.uploadContext.inspection || {});
     });
   }
 
