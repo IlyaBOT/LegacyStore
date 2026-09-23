@@ -30,11 +30,11 @@ type adminArtifactPayload struct {
 	MinOS              string `json:"min_os"`
 	MaxSupportedOS     string `json:"max_supported_os"`
 	MaxTestedOS        string `json:"max_tested_os"`
-	HardBlockAboveMax  bool     `json:"hard_block_above_max"`
-	Architectures      []string `json:"architectures"`
-	RequiresRosetta    bool     `json:"requires_rosetta"`
-	RequiresJava       bool   `json:"requires_java"`
-	InstallNotes       string `json:"install_notes"`
+	HardBlockAboveMax bool     `json:"hard_block_above_max"`
+	Architectures     []string `json:"architectures"`
+	RequiresRosetta   bool     `json:"requires_rosetta"`
+	RequiresJava      bool     `json:"requires_java"`
+	InstallNotes      string   `json:"install_notes"`
 	ModerationStatus   string `json:"moderation_status"`
 }
 
