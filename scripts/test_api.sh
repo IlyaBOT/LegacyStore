@@ -127,10 +127,7 @@ multipart_test_upload() {
     -F "file=@$MU_FILE" \
     -F 'min_os=10.4' \
     -F 'max_tested_os=10.15' \
-    -F 'arch_i386=true' \
-    -F 'arch_x86_64=true' \
-    -F 'supports_32bit=true' \
-    -F 'supports_64bit=true' \
+    -F 'architectures=i386,x86_64' \
     "$BASE_URL$MU_PATH")
   printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
 }
