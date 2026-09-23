@@ -89,10 +89,18 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				LIMIT 1
 			), '') AS icon,
 			COALESCE((
-				SELECT image_url
-				FROM screenshots
-				WHERE app_id = a.id
-				ORDER BY sort_order, id
+				SELECT s.image_url
+				FROM screenshots s
+				WHERE s.app_id = a.id
+				  AND (
+				      s.app_version_id IS NULL OR
+				      EXISTS (
+				          SELECT 1 FROM artifacts published
+				          WHERE published.app_version_id = s.app_version_id
+				            AND published.moderation_status = 'approved'
+				      )
+				  )
+				ORDER BY s.sort_order, s.id
 				LIMIT 1
 			), '') AS hero_image,
 			COALESCE(stats.average_rating, 0) AS rating,
@@ -134,6 +142,13 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 		selected, result := chooseArtifact(filters.Target, artifacts)
 		if filters.CompatibleOnly && result.Status == "blocked" {
 			continue
+		}
+		if selected != nil {
+			if icon, iconErr := s.iconForVersion(ctx, row.ID, selected.VersionID, row.Icon); iconErr == nil {
+				row.Icon = icon
+			} else {
+				return nil, iconErr
+			}
 		}
 
 		summary := AppSummary{
@@ -224,7 +239,16 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 	}
 	selected, result := chooseArtifact(target, artifacts)
 
-	screenshots, err := s.screenshots(ctx, row.ID)
+	selectedVersionID := int64(0)
+	if selected != nil {
+		selectedVersionID = selected.VersionID
+		if icon, iconErr := s.iconForVersion(ctx, row.ID, selectedVersionID, row.Icon); iconErr == nil {
+			row.Icon = icon
+		} else {
+			return nil, iconErr
+		}
+	}
+	screenshots, err := s.screenshots(ctx, row.ID, selectedVersionID)
 	if err != nil {
 		return nil, err
 	}
@@ -415,14 +439,55 @@ func (s *Store) artifactByID(ctx context.Context, artifactID int64) (*artifactRo
 	return &artifact, nil
 }
 
-func (s *Store) screenshots(ctx context.Context, appID int64) ([]Screenshot, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT image_url, COALESCE(caption, ''), sort_order
-		FROM screenshots
+func (s *Store) iconForVersion(ctx context.Context, appID, versionID int64, fallback string) (string, error) {
+	if versionID <= 0 {
+		return fallback, nil
+	}
+	var icon string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT image_url
+		FROM icons
 		WHERE app_id = $1
-		ORDER BY sort_order, id
+		  AND (app_version_id = $2 OR app_version_id IS NULL)
+		  AND (
+		      app_version_id IS NULL OR
+		      EXISTS (
+		          SELECT 1 FROM artifacts published
+		          WHERE published.app_version_id = icons.app_version_id
+		            AND published.moderation_status = 'approved'
+		      )
+		  )
+		ORDER BY CASE WHEN app_version_id = $2 THEN 0 ELSE 1 END, id DESC
+		LIMIT 1
+	`, appID, versionID).Scan(&icon)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fallback, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return icon, nil
+}
+
+func (s *Store) screenshots(ctx context.Context, appID, versionID int64) ([]Screenshot, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.image_url, COALESCE(s.caption, ''), s.sort_order
+		FROM screenshots s
+		WHERE s.app_id = $1
+		  AND (
+		      s.app_version_id IS NULL OR
+		      (
+		          s.app_version_id = NULLIF($2, 0)
+		          AND EXISTS (
+		              SELECT 1 FROM artifacts published
+		              WHERE published.app_version_id = s.app_version_id
+		                AND published.moderation_status = 'approved'
+		          )
+		      )
+		  )
+		ORDER BY CASE WHEN s.app_version_id = NULLIF($2, 0) THEN 0 ELSE 1 END, s.sort_order, s.id
 		LIMIT 8
-	`, appID)
+	`, appID, versionID)
 	if err != nil {
 		return nil, err
 	}
