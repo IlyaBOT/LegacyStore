@@ -88,7 +88,7 @@ func (r *Router) adminRemoveRole(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminApps(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
+	if _, ok := r.requireAdmin(w, req); !ok {
 		return
 	}
 	apps, err := r.users.ListAdminApps(req.Context(), req.URL.Query().Get("status"), intParam(req.URL.Query().Get("limit"), 50))
@@ -100,11 +100,21 @@ func (r *Router) adminApps(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminApp(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
+	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	if !ok {
 		return
 	}
 	id, ok := pathID(w, req, "id")
 	if !ok {
+		return
+	}
+	allowed, err := r.users.CanViewContributorApp(req.Context(), *actor, id)
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	if !allowed {
+		writeAccountError(w, account.ErrForbidden)
 		return
 	}
 	app, err := r.users.GetAdminApp(req.Context(), id)
