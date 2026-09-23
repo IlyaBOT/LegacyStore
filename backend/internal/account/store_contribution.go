@@ -13,6 +13,62 @@ import (
 	"legacystore/backend/internal/architecture"
 )
 
+func (s *Store) CanViewContributorApp(ctx context.Context, actor User, appID int64) (bool, error) {
+	if HasRole(actor, "moder", "admin") {
+		return true, nil
+	}
+	var status string
+	var createdBy sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT moderation_status, created_by
+		FROM apps
+		WHERE id = $1
+	`, appID).Scan(&status, &createdBy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	if err != nil {
+		return false, err
+	}
+	if status == "approved" {
+		return true, nil
+	}
+	return createdBy.Valid && createdBy.Int64 == actor.ID, nil
+}
+
+func (s *Store) CanUploadAppMedia(ctx context.Context, actor User, appID, versionID int64) (bool, error) {
+	if HasRole(actor, "moder", "admin") {
+		return true, nil
+	}
+	if versionID <= 0 {
+		var createdBy sql.NullInt64
+		err := s.db.QueryRowContext(ctx, `SELECT created_by FROM apps WHERE id = $1`, appID).Scan(&createdBy)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		if err != nil {
+			return false, err
+		}
+		return createdBy.Valid && createdBy.Int64 == actor.ID, nil
+	}
+
+	var allowed bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM app_versions v
+			JOIN artifacts a ON a.app_version_id = v.id
+			JOIN moderation_queue mq
+			  ON mq.entity_type = 'artifact'
+			 AND mq.entity_id = a.id::text
+			WHERE v.id = $1
+			  AND v.app_id = $2
+			  AND mq.submitted_by = $3
+		)
+	`, versionID, appID, actor.ID).Scan(&allowed)
+	return allowed, err
+}
+
 func (s *Store) CreateStagedUpload(ctx context.Context, actor User, input StageUploadInput, ip net.IP, userAgent string) (*StagedUpload, error) {
 	if input.AppID <= 0 || input.SubmittedBy != actor.ID ||
 		strings.TrimSpace(input.OriginalFilename) == "" ||
