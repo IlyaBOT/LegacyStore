@@ -9,14 +9,14 @@ import (
 var ErrUnsupported = errors.New("unsupported architecture")
 
 var supported = map[string]bool{
-	"i386":    true,
-	"i686":    true,
-	"x86_64":  true,
-	"ppc":     true,
-	"ppc-g3":  true,
-	"ppc-g4":  true,
-	"ppc-g5":  true,
-	"ppc64":   true,
+	"i386":   true,
+	"i686":   true,
+	"x86_64": true,
+	"ppc":    true,
+	"ppc-g3": true,
+	"ppc-g4": true,
+	"ppc-g5": true,
+	"ppc64":  true,
 }
 
 func NormalizeOne(value string) (string, error) {
