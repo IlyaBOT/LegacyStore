@@ -80,7 +80,7 @@ func (r *Router) adminVersions(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateVersion(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
@@ -162,7 +162,7 @@ func (r *Router) adminArtifacts(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateArtifact(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
@@ -319,7 +319,7 @@ func (r *Router) adminDeleteMirror(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateIcon(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
