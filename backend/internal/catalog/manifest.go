@@ -46,9 +46,7 @@ type ManifestArtifact struct {
 	MaxSupportedOS    string   `json:"max_supported_os,omitempty"`
 	MaxTestedOS       string   `json:"max_tested_os,omitempty"`
 	HardBlockAboveMax bool     `json:"hard_block_above_max,omitempty"`
-	Archs             []string `json:"archs"`
-	Supports32Bit     bool     `json:"supports_32bit"`
-	Supports64Bit     bool     `json:"supports_64bit"`
+	Architectures     []string `json:"architectures"`
 	RequiresRosetta   bool     `json:"requires_rosetta,omitempty"`
 	RequiresJava      bool     `json:"requires_java,omitempty"`
 	InstallNotes      string   `json:"install_notes,omitempty"`
@@ -96,7 +94,7 @@ func (s *Store) Manifest(ctx context.Context) (*ManifestPayload, error) {
 		return nil, err
 	}
 	return &ManifestPayload{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 		Categories:    categories,
 		Apps:          apps,
@@ -133,9 +131,7 @@ func manifestVersions(artifacts []artifactRow) []ManifestVersion {
 			MaxSupportedOS:    artifact.MaxSupportedOS,
 			MaxTestedOS:       artifact.MaxTestedOS,
 			HardBlockAboveMax: artifact.HardBlockAboveMax,
-			Archs:             artifactArchs(artifact),
-			Supports32Bit:     artifact.Supports32Bit,
-			Supports64Bit:     artifact.Supports64Bit,
+			Architectures:     append([]string(nil), artifact.Architectures...),
 			RequiresRosetta:   artifact.RequiresRosetta,
 			RequiresJava:      artifact.RequiresJava,
 			InstallNotes:      artifact.InstallNotes,
