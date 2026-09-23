@@ -64,9 +64,15 @@ frontend_bundle() {
   N=FrontendBundle
   static_get '/app.js'
   [ "$STATUS" = 200 ] || { fail "$N" HttpStatus 200 "$STATUS"; return; }
-  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' '/home?' 'homeCarousel' 'Popular' 'Top Downloads' 'New Releases' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
+  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/contributions/apps/' '/contributions/uploads/' '/home?' 'homeCarousel' 'Popular' 'Top Downloads' 'New Releases' 'Create Application' 'Upload Version' 'Upload & Analyze' 'Release Metadata' 'artifactDropZone' 'uploadDropOverlay' 'Intel 32 Bit (i386 or i686)' 'Intel 64 Bit (x86_64)' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
     grep -Fq "$marker" "$BODY" || { fail "$N" MissingIntegration "$marker" 'not found'; return; }
   done
+  if grep -Fq 'arch_i386' "$BODY" || grep -Fq 'arch_x86_64' "$BODY" || grep -Fq 'supports_32bit' "$BODY" || grep -Fq 'supports_64bit' "$BODY"; then
+    fail "$N" ArchitectureModel 'single architecture-code model without duplicate bitness flags' 'legacy architecture/bitness field found'; return
+  fi
+  if grep -Fq 'Upload Application</h1>' "$BODY"; then
+    fail "$N" ContributionWizard 'separate Create Application and two-step Upload Version workflow' 'legacy one-screen upload form found'; return
+  fi
   if grep -Fq 'New and Noteworthy' "$BODY" || grep -Fq 'panel("Graphics & Design"' "$BODY"; then
     fail "$N" LegacyHomeSections 'Popular, Top Downloads and New Releases only' 'legacy home section found'; return
   fi
