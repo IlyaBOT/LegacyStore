@@ -24,7 +24,7 @@ test_admin_moderation() {
   api_request POST '/api/v1/auth/login' 1 '' "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\",\"remember_me\":true}"
   ADMIN_TOKEN=$(body_value '.session_token // empty')
   if ! status_is 200 || [ -z "$ADMIN_TOKEN" ] || ! jq_ok '.user.roles | index("admin")'; then
-    err "$NAME" AdminLogin 'seed admin session' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" AdminLogin 'admin session' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
@@ -34,38 +34,79 @@ test_admin_moderation() {
     return
   fi
 
-  api_request POST "/api/v1/admin/users/$UPLOADER_ID/roles" 1 "$ADMIN_TOKEN" '{"role":"trusted"}'
-  if ! status_is 200; then
-    err "$NAME" GrantTrusted '200' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  api_request POST "/api/v1/admin/users/$UPLOADER_ID/roles" 1 "$ADMIN_TOKEN" '{"role":"uploader"}'
+  if ! status_is 200 || ! jq_ok '.roles | index("uploader")'; then
+    err "$NAME" GrantUploader 'uploader role' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
   APP_SLUG="api-upload-$(date +%s)-$$"
   BUNDLE_ID="com.legacy.apiupload.$(date +%s).$$"
-  api_request POST '/api/v1/admin/apps' 1 "$UPLOADER_TOKEN" "{\"slug\":\"$APP_SLUG\",\"name\":\"API Uploaded App\",\"bundle_id\":\"$BUNDLE_ID\",\"developer_name\":\"LegacyStore\",\"summary\":\"API moderation smoke test\",\"description\":\"Temporary app for moderation smoke test.\",\"category_slug\":\"utilities\"}"
-  if ! status_is 200 || ! jq_ok '.app.id and .app.moderation_status == "pending"'; then
-    err "$NAME" TrustedSubmission 'pending app' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  api_request POST '/api/v1/admin/apps' 1 "$UPLOADER_TOKEN" "{\"slug\":\"$APP_SLUG\",\"name\":\"API Uploaded App\",\"bundle_id\":\"$BUNDLE_ID\",\"developer_name\":\"LegacyStore\",\"summary\":\"API moderation smoke test\",\"description\":\"Temporary app for moderation smoke test.\",\"website_url\":\"https://example.invalid/app\",\"source_url\":\"https://github.com/example/legacy-app\",\"category_slug\":\"utilities\"}"
+  if ! status_is 200 || ! jq_ok '.app.id and .app.moderation_status == "pending" and .app.website_url and .app.source_url'; then
+    err "$NAME" CreateApplication 'pending app page with shared metadata' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
   APP_ID=$(body_value '.app.id')
 
+  api_request GET "/api/v1/admin/apps/$APP_ID" 1 "$UPLOADER_TOKEN"
+  if ! status_is 200 || ! jq_ok --arg id "$APP_ID" '.app.id == ($id|tonumber) and (.versions | type == "array")'; then
+    err "$NAME" ContributorApplication 'uploader can open contributor application page' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
   api_request GET '/api/v1/admin/moderation?status=pending' 1 "$ADMIN_TOKEN"
   QUEUE_ID=$(jq -r --arg id "$APP_ID" '.items[] | select(.entity_type == "app" and .entity_id == $id) | .id' "$BODY_FILE" 2>/dev/null | head -n 1)
   if ! status_is 200 || [ -z "$QUEUE_ID" ]; then
-    err "$NAME" Queue 'pending moderation queue item' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" AppQueue 'pending application moderation item' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request POST "/api/v1/admin/moderation/$QUEUE_ID/approve" 1 "$ADMIN_TOKEN" '{"comment":"API approved"}'
+  api_request POST "/api/v1/admin/moderation/$QUEUE_ID/approve" 1 "$ADMIN_TOKEN" '{"comment":"Application approved"}'
   if ! status_is 200 || ! jq_ok '.status == "ok"'; then
-    err "$NAME" Approval 'approved status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" AppApproval 'approved status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request POST "/api/v1/admin/apps/$APP_ID/versions" 1 "$UPLOADER_TOKEN" '{"version":"1.0-test","changelog":"Integration upload test"}'
-  VERSION_ID=$(body_value '.version.id // empty')
-  if ! status_is 201 || [ -z "$VERSION_ID" ]; then
-    err "$NAME" CreateVersion '201 and version id' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  UPLOAD_FILE="$TMP_DIR/LegacyStore-API-Test.dmg"
+  printf 'LegacyStore staged contribution artifact\n' > "$UPLOAD_FILE"
+  HTTP_STATUS=$(curl -sS -o "$BODY_FILE" -D "$HEADERS_FILE" -w '%{http_code}' \
+    -X POST \
+    -H 'X-Forwarded-Proto: https' \
+    -H "Authorization: Bearer $UPLOADER_TOKEN" \
+    -H 'User-Agent: LegacyStore-API-Tests/1.0' \
+    -F "file=@$UPLOAD_FILE" \
+    "$BASE_URL/api/v1/contributions/apps/$APP_ID/stage")
+  printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
+  STAGE_UID=$(body_value '.stage.uid // empty')
+  if ! status_is 201 || [ -z "$STAGE_UID" ] || ! jq_ok '.stage.status == "staged" and (.stage.sha256 | length == 64) and .stage.app_id'; then
+    err "$NAME" StageRelease '201 staged upload with SHA-256' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/contributions/uploads/$STAGE_UID" 1 "$UPLOADER_TOKEN"
+  if ! status_is 200 || ! jq_ok --arg uid "$STAGE_UID" '.stage.uid == $uid and .stage.status == "staged"'; then
+    err "$NAME" ReadStage 'staged upload belongs to uploader' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST "/api/v1/contributions/uploads/$STAGE_UID/commit" 1 "$UPLOADER_TOKEN" '{"version":"1.0-test","changelog":"Integration staged upload test","is_recommended":true,"min_os":"10.4","max_supported_os":"10.15","max_tested_os":"10.15","hard_block_above_max":false,"architectures":["i386","x86_64"],"requires_rosetta":false,"requires_java":false,"install_notes":""}'
+  VERSION_ID=$(body_value '.release.version_id // empty')
+  ARTIFACT_ID=$(body_value '.release.artifact.id // empty')
+  if ! status_is 201 || [ -z "$VERSION_ID" ] || [ -z "$ARTIFACT_ID" ] || ! jq_ok '.release.moderation_status == "pending" and (.release.artifact.architectures | index("i386")) and (.release.artifact.architectures | index("x86_64"))'; then
+    err "$NAME" CommitRelease 'pending artifact with unified architecture codes' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST "/api/v1/contributions/uploads/$STAGE_UID/commit" 1 "$UPLOADER_TOKEN" '{"version":"1.0-test","min_os":"10.4","architectures":["x86_64"]}'
+  if ! status_is 404; then
+    err "$NAME" StageOneShot 'committed stage cannot be committed twice' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/files/$ARTIFACT_ID" 0
+  if ! status_is 404; then
+    err "$NAME" QuarantineIsolation '404 before artifact approval' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
@@ -77,10 +118,14 @@ test_admin_moderation() {
   <circle cx="512" cy="384" r="180" fill="#ffffff"/>
 </svg>
 SVG
-    image_upload_request "/api/v1/admin/apps/$APP_ID/icons/upload" "$UPLOADER_TOKEN"       -F "file=@$ICON_FILE;type=image/svg+xml"       -F "app_version_id=$VERSION_ID"       -F 'min_os=10.4'       -F 'max_os=10.15'
+    image_upload_request "/api/v1/admin/apps/$APP_ID/icons/upload" "$UPLOADER_TOKEN" \
+      -F "file=@$ICON_FILE;type=image/svg+xml" \
+      -F "app_version_id=$VERSION_ID" \
+      -F 'min_os=10.4' \
+      -F 'max_os=10.15'
     ICON_URL=$(body_value '.image.url // empty')
     if ! status_is 201 || [ -z "$ICON_URL" ] || ! jq_ok '.image.mime_type == "image/svg+xml" and .image.width <= 512 and .image.height <= 512 and .image.size_bytes <= 1048576'; then
-      err "$NAME" SVGIcon 'sanitized SVG icon <=512x512 and <=1MiB' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+      err "$NAME" SVGIcon 'sanitized version-specific SVG icon <=512x512 and <=1MiB' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
       return
     fi
 
@@ -99,42 +144,41 @@ SVG
     make_test_png "$SCREEN3" 1280 800
     make_test_png "$SCREEN4" 1024 768
 
-    image_upload_request "/api/v1/admin/apps/$APP_ID/screenshots/upload" "$ADMIN_TOKEN"       -F "images=@$SCREEN1;type=image/png"       -F "images=@$SCREEN2;type=image/png"       -F "images=@$SCREEN3;type=image/png"       -F "app_version_id=$VERSION_ID"       -F 'min_os=10.4'       -F 'max_os=10.15'
+    image_upload_request "/api/v1/admin/apps/$APP_ID/screenshots/upload" "$UPLOADER_TOKEN" \
+      -F "images=@$SCREEN1;type=image/png" \
+      -F "images=@$SCREEN2;type=image/png" \
+      -F "images=@$SCREEN3;type=image/png" \
+      -F "app_version_id=$VERSION_ID" \
+      -F 'min_os=10.4' \
+      -F 'max_os=10.15'
     if ! status_is 201 || ! jq_ok '(.screenshots | length == 3) and (.images | length == 3) and (.images | all(.mime_type == "image/jpeg" and .size_bytes <= 1048576))'; then
-      err "$NAME" Screenshots 'three compressed screenshots' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+      err "$NAME" Screenshots 'three compressed release screenshots' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
       return
     fi
 
-    image_upload_request "/api/v1/admin/apps/$APP_ID/screenshots/upload" "$ADMIN_TOKEN"       -F "images=@$SCREEN4;type=image/png"       -F "app_version_id=$VERSION_ID"
+    image_upload_request "/api/v1/admin/apps/$APP_ID/screenshots/upload" "$UPLOADER_TOKEN" \
+      -F "images=@$SCREEN4;type=image/png" \
+      -F "app_version_id=$VERSION_ID"
     if ! status_is 400 || ! jq_ok '.error == "screenshot_limit"'; then
       err "$NAME" ScreenshotLimit 'fourth screenshot rejected for the same app version' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
       return
     fi
   fi
 
-  UPLOAD_FILE="$TMP_DIR/LegacyStore-API-Test.dmg"
-  printf 'LegacyStore integration artifact\n' > "$UPLOAD_FILE"
-  multipart_test_upload "/api/v1/admin/versions/$VERSION_ID/upload" "$UPLOADER_TOKEN" "$UPLOAD_FILE"
-  ARTIFACT_ID=$(body_value '.artifact.id // empty')
-  if ! status_is 200 || [ -z "$ARTIFACT_ID" ] || ! jq_ok '.artifact.moderation_status == "pending" and .upload.status == "quarantined" and (.upload.sha256 | length == 64)'; then
-    err "$NAME" Upload 'quarantined artifact with SHA-256' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
-    return
-  fi
-
-  api_request GET "/api/v1/files/$ARTIFACT_ID" 0
-  if ! status_is 404; then
-    err "$NAME" QuarantineIsolation '404 before artifact approval' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
+  if ! status_is 200 || ! jq_ok '.recommended_artifact == null or (.recommended_artifact.id == null)'; then
+    err "$NAME" PendingReleaseHidden 'pending release is not public before moderation' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
   api_request GET '/api/v1/admin/moderation?status=pending' 1 "$ADMIN_TOKEN"
   ARTIFACT_QUEUE_ID=$(jq -r --arg id "$ARTIFACT_ID" '.items[] | select(.entity_type == "artifact" and .entity_id == $id) | .id' "$BODY_FILE" 2>/dev/null | head -n 1)
   if ! status_is 200 || [ -z "$ARTIFACT_QUEUE_ID" ]; then
-    err "$NAME" ArtifactQueue 'pending artifact queue item' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    err "$NAME" ArtifactQueue 'pending artifact moderation item' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
-  api_request POST "/api/v1/admin/moderation/$ARTIFACT_QUEUE_ID/approve" 1 "$ADMIN_TOKEN" '{"comment":"Artifact approved"}'
+  api_request POST "/api/v1/admin/moderation/$ARTIFACT_QUEUE_ID/approve" 1 "$ADMIN_TOKEN" '{"comment":"Release artifact approved"}'
   if ! status_is 200 || ! jq_ok '.status == "ok"'; then
     err "$NAME" ArtifactApproval 'approved status' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
@@ -147,18 +191,17 @@ SVG
   fi
 
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
-  if ! status_is 200 || ! jq_ok '.downloads == 0 and (.versions[0].downloads == 0)'; then
-    err "$NAME" DownloadMetadataNotCounted 'download metadata request does not increment counters' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  if ! status_is 200 || ! jq_ok '.downloads == 0 and (.versions[0].downloads == 0) and (.recommended_artifact.architecture_labels | index("Intel 32 Bit (i386 or i686)")) and (.recommended_artifact.architecture_labels | index("Intel 64 Bit (x86_64)"))'; then
+    err "$NAME" PublicRelease 'published release exposes human architecture labels and zero downloads' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
   api_request GET "/api/v1/files/$ARTIFACT_ID" 0
   if ! status_is 200 || ! cmp -s "$UPLOAD_FILE" "$BODY_FILE"; then
-    err "$NAME" LocalFileDownload 'approved file bytes' "$(cat "$STATUS_FILE")"
+    err "$NAME" LocalFileDownload 'approved staged file bytes' "$(cat "$STATUS_FILE")"
     return
   fi
 
-  # Repeating the same anonymous full download from the same IP stays unique.
   api_request GET "/api/v1/files/$ARTIFACT_ID" 0
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
   if ! status_is 200 || ! jq_ok '.downloads == 1 and (.versions[0].downloads == 1)'; then
@@ -166,7 +209,6 @@ SVG
     return
   fi
 
-  # A bot-like full fetch is served but must not change analytics.
   api_request GET "/api/v1/files/$ARTIFACT_ID" 0 '' '' 'curl/8.0'
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
   if ! status_is 200 || ! jq_ok '.downloads == 1'; then
@@ -174,7 +216,6 @@ SVG
     return
   fi
 
-  # Authenticated users are unique by user + artifact rather than by IP.
   api_request GET "/api/v1/files/$ARTIFACT_ID" 1 "$UPLOADER_TOKEN"
   api_request GET "/api/v1/files/$ARTIFACT_ID" 1 "$UPLOADER_TOKEN"
   api_request GET "/api/v1/apps/$APP_SLUG?os=10.9.5&arch=x86_64" 0
@@ -188,5 +229,6 @@ SVG
     err "$NAME" AuditLog 'non-empty audit log' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
+
   ok "$NAME"
 }
