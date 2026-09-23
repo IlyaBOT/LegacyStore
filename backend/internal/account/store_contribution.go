@@ -32,6 +32,8 @@ func (s *Store) CreateStagedUpload(ctx context.Context, actor User, input StageU
 			return nil, ErrInvalidCredential
 		}
 		input.DetectedArchitectures = normalized
+	} else {
+		input.DetectedArchitectures = []string{}
 	}
 	if len(input.Warnings) == 0 {
 		input.Warnings = json.RawMessage("[]")
