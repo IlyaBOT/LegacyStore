@@ -60,7 +60,7 @@ type ReleaseSubmission struct {
 type ReleaseSubmissionResult struct {
 	AppID            int64         `json:"app_id"`
 	VersionID        int64         `json:"version_id"`
-	Version           string        `json:"version"`
-	Artifact          AdminArtifact `json:"artifact"`
+	Version          string        `json:"version"`
+	Artifact         AdminArtifact `json:"artifact"`
 	ModerationStatus string        `json:"moderation_status"`
 }
