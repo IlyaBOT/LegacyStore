@@ -159,7 +159,7 @@ test_signed_catalog() {
   body_value '.pem' > "$TMP_DIR/catalog-public.pem"
 
   api_request GET '/api/v1/catalog/manifest' 0
-  if ! status_is 200 || ! jq_ok '.payload.schema_version == 1 and (.payload.apps | type == "array" and length > 0) and .payload_base64 and .signature.value and .signature.algorithm == "rsa-sha256-pkcs1v15"'; then
+  if ! status_is 200 || ! jq_ok '.payload.schema_version == 2 and (.payload.apps | type == "array" and length > 0) and (.payload.apps[0].versions[0].artifacts[0].architectures | type == "array" and length > 0) and .payload_base64 and .signature.value and .signature.algorithm == "rsa-sha256-pkcs1v15"'; then
     err "$NAME" Manifest 'signed manifest envelope with non-empty catalog' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
