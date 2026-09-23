@@ -35,8 +35,14 @@ test_admin_moderation() {
   fi
 
   api_request POST "/api/v1/admin/users/$UPLOADER_ID/roles" 1 "$ADMIN_TOKEN" '{"role":"uploader"}'
-  if ! status_is 200 || ! jq_ok '.roles | index("uploader")'; then
-    err "$NAME" GrantUploader 'uploader role' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+  if ! status_is 200 || ! jq_ok '.status == "ok"'; then
+    err "$NAME" GrantUploader '200 status=ok' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET '/api/v1/me' 1 "$UPLOADER_TOKEN"
+  if ! status_is 200 || ! jq_ok '.user.roles | index("uploader")'; then
+    err "$NAME" UploaderRoleVisible 'uploader role visible to existing session' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
 
