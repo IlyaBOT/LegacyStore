@@ -26,11 +26,11 @@ type AdminArtifact struct {
 	MinOS              string `json:"min_os"`
 	MaxSupportedOS     string `json:"max_supported_os,omitempty"`
 	MaxTestedOS        string `json:"max_tested_os,omitempty"`
-	HardBlockAboveMax  bool     `json:"hard_block_above_max"`
-	Architectures      []string `json:"architectures"`
-	RequiresRosetta    bool     `json:"requires_rosetta"`
-	RequiresJava       bool   `json:"requires_java"`
-	InstallNotes       string `json:"install_notes,omitempty"`
+	HardBlockAboveMax bool     `json:"hard_block_above_max"`
+	Architectures     []string `json:"architectures"`
+	RequiresRosetta   bool     `json:"requires_rosetta"`
+	RequiresJava      bool     `json:"requires_java"`
+	InstallNotes      string   `json:"install_notes,omitempty"`
 	ModerationStatus   string `json:"moderation_status"`
 	CreatedAt          string `json:"created_at"`
 	UpdatedAt          string `json:"updated_at"`
