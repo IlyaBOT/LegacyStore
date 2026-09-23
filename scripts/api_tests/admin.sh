@@ -50,7 +50,7 @@ test_admin_moderation() {
   APP_ID=$(body_value '.app.id')
 
   api_request GET "/api/v1/admin/apps/$APP_ID" 1 "$UPLOADER_TOKEN"
-  if ! status_is 200 || ! jq_ok --arg id "$APP_ID" '.app.id == ($id|tonumber) and (.versions | type == "array")'; then
+  if ! status_is 200 || ! jq -e --arg id "$APP_ID" '.app.id == ($id|tonumber) and (.versions | type == "array")' "$BODY_FILE" >/dev/null 2>&1; then
     err "$NAME" ContributorApplication 'uploader can open contributor application page' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
