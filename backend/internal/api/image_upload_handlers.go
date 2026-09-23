@@ -113,6 +113,15 @@ func (r *Router) adminUploadIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	versionID := parseOptionalInt64(fields["app_version_id"])
+	allowed, err := r.users.CanUploadAppMedia(req.Context(), *actor, appID, versionID)
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	if !allowed {
+		writeAccountError(w, account.ErrForbidden)
+		return
+	}
 	minOS := defaultString(fields["min_os"], "10.4")
 	maxOS := defaultString(fields["max_os"], "15")
 	if !validVersionRange(minOS, maxOS) {
@@ -147,6 +156,15 @@ func (r *Router) adminUploadScreenshots(w http.ResponseWriter, req *http.Request
 		return
 	}
 	versionID := parseOptionalInt64(fields["app_version_id"])
+	allowed, err := r.users.CanUploadAppMedia(req.Context(), *actor, appID, versionID)
+	if err != nil {
+		writeAccountError(w, err)
+		return
+	}
+	if !allowed {
+		writeAccountError(w, account.ErrForbidden)
+		return
+	}
 	minOS := defaultString(fields["min_os"], "10.4")
 	maxOS := defaultString(fields["max_os"], "15")
 	if !validVersionRange(minOS, maxOS) {
