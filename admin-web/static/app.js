@@ -1414,7 +1414,12 @@ function renderUploads() {
         formData.append("max_os", "15");
         return api("/admin/apps/" + encodeURIComponent(app.id) + "/icons/upload", { method: "POST", body: formData }).then(function () { return payload; });
       }).then(function (payload) {
-        showToast("Application page created.", "success");
+        var status = payload.app && payload.app.moderation_status ? payload.app.moderation_status : "pending";
+        if (status === "pending") {
+          showToast("Application page created and sent to moderation. You can upload releases now.", "success");
+        } else {
+          showToast("Application page created.", "success");
+        }
         routeTo("manage-app/" + encodeURIComponent(payload.app.id));
       }).catch(function (error) {
         button.disabled = false;
@@ -1429,28 +1434,62 @@ function renderUploads() {
     api("/admin/apps/" + encodeURIComponent(appId)).then(function (payload) {
       var app = payload.app || {};
       var versions = payload.versions || [];
+      var requests = versions.map(function (version) {
+        return api("/admin/versions/" + encodeURIComponent(version.id) + "/artifacts").then(function (artifactPayload) {
+          version.artifacts = artifactPayload.artifacts || [];
+          return version;
+        }).catch(function () {
+          version.artifacts = [];
+          return version;
+        });
+      });
+      return Promise.all(requests).then(function () { return { app: app, versions: versions }; });
+    }).then(function (payload) {
+      var app = payload.app || {};
+      var versions = payload.versions || [];
       var iconHTML = app.icon ?
         '<div class="app-icon"><span class="app-icon-initials">' + escapeHTML(appInitials(app)) + '</span><img class="app-icon-image" data-app-icon-img src="' + escapeHTML(app.icon) + '" alt=""></div>' :
         appIconHTML(app, false);
+
       var rows = versions.length ? versions.map(function (version) {
+        var artifacts = version.artifacts || [];
+        var status = "metadata only";
+        if (artifacts.some(function (artifact) { return artifact.moderation_status === "approved"; })) {
+          status = "approved";
+        } else if (artifacts.some(function (artifact) { return artifact.moderation_status === "pending"; })) {
+          status = "pending";
+        } else if (artifacts.some(function (artifact) { return artifact.moderation_status === "rejected"; })) {
+          status = "rejected";
+        }
+        var arch = [];
+        artifacts.forEach(function (artifact) {
+          (artifact.architectures || []).forEach(function (code) {
+            if (arch.indexOf(code) < 0) { arch.push(code); }
+          });
+        });
         return '<tr><td><strong>' + escapeHTML(version.version) + '</strong></td><td>' + escapeHTML(version.release_date || "") + '</td><td>' +
-          (version.is_recommended ? '<span class="status-chip active">Recommended</span>' : '') + '</td></tr>';
-      }).join("") : '<tr><td colspan="3" class="muted">No releases yet.</td></tr>';
+          escapeHTML(humanArchitectureLabels(arch).join(", ") || "—") + '</td><td>' + statusChip(status) +
+          (version.is_recommended ? ' <span class="status-chip active">Recommended</span>' : '') + '</td></tr>';
+      }).join("") : '<tr><td colspan="4" class="muted">No releases yet.</td></tr>';
+
+      var moderationNote = app.moderation_status === "pending" ?
+        '<div class="web-security-note contribution-moderation-note">This application page is awaiting moderation. You can continue uploading releases; nothing becomes public until it is approved.</div>' :
+        (app.moderation_status === "rejected" ? '<div class="web-security-note contribution-moderation-note is-error">This application page was rejected. A moderator must approve the page before it can be published.</div>' : '');
 
       main.innerHTML =
         '<section class="detail-head contributor-app-head">' + iconHTML +
         '<div><div class="muted">Contributor application page</div><h1>' + escapeHTML(app.name || "Application") + '</h1>' +
         '<p>' + escapeHTML(app.summary || "") + '</p><div class="badge-row">' + statusChip(app.moderation_status || "pending") + '</div></div>' +
         '<div class="detail-actions"><button class="blue-button" id="uploadVersionButton" type="button">Upload Version</button>' +
-        (app.slug ? '<button class="metal-button" data-route="app/' + escapeHTML(app.slug) + '" type="button">Public Page</button>' : '') +
-        '</div></section>' +
+        (app.slug && app.moderation_status === "approved" ? '<button class="metal-button" data-route="app/' + escapeHTML(app.slug) + '" type="button">Public Page</button>' : '') +
+        '</div></section>' + moderationNote +
         '<div class="detail-grid"><section class="detail-copy">' +
         '<section class="section-panel contributor-summary"><div class="section-header"><h2>Application metadata</h2></div>' +
         '<div class="contributor-metadata-grid">' +
         infoRow("Developer", app.developer_name) + infoRow("Bundle ID", app.bundle_id) + infoRow("Category", app.category) +
         infoRow("Homepage", app.website_url) + infoRow("Source", app.source_url) + '</div>' +
         '<p>' + escapeHTML(app.description || "") + '</p></section>' +
-        '<h2>Releases</h2><table class="version-table"><thead><tr><th>Version</th><th>Date</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<h2>Releases</h2><table class="version-table"><thead><tr><th>Version</th><th>Date</th><th>Architecture</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>' +
         '</section><aside class="side-box"><h2>Contribution</h2><p class="muted">Application ID: <span class="mono">' + escapeHTML(app.id) + '</span></p>' +
         '<p>Upload binaries as separate releases. Each release gets its own compatibility metadata and optional version-specific icon.</p>' +
         '<button class="blue-button full-width" id="uploadVersionButtonAside" type="button">Upload Version</button></aside></div>';
@@ -1458,10 +1497,10 @@ function renderUploads() {
       bindRouteButtons(main);
       bindImageFallbacks(main);
       function goUpload() { routeTo("upload-version/" + encodeURIComponent(app.id)); }
-      var a=document.getElementById("uploadVersionButton");
-      var b=document.getElementById("uploadVersionButtonAside");
-      if(a){a.addEventListener("click",goUpload);}
-      if(b){b.addEventListener("click",goUpload);}
+      var a = document.getElementById("uploadVersionButton");
+      var b = document.getElementById("uploadVersionButtonAside");
+      if (a) { a.addEventListener("click", goUpload); }
+      if (b) { b.addEventListener("click", goUpload); }
       setStatus("Showing: " + (app.name || "Application"), versions.length + " releases", "Contributor view");
       renderSidebar();
     }).catch(renderError);
@@ -1493,10 +1532,70 @@ function renderUploads() {
     }).catch(renderError);
   }
 
+  function architectureHumanLabel(code) {
+    var labels = {
+      i386: "Intel 32 Bit (i386 or i686)",
+      i686: "Intel 32 Bit (i386 or i686)",
+      x86_64: "Intel 64 Bit (x86_64)",
+      ppc: "PowerPC 32 Bit (ppc)",
+      "ppc-g3": "PowerPC G3 (ppc-g3)",
+      "ppc-g4": "PowerPC G4 (ppc-g4)",
+      "ppc-g5": "PowerPC G5 (ppc-g5)",
+      ppc64: "PowerPC 64 Bit (ppc64)"
+    };
+    return labels[code] || code;
+  }
+
+  function humanArchitectureLabels(codes) {
+    var labels = [];
+    (codes || []).forEach(function (code) {
+      var label = architectureHumanLabel(code);
+      if (labels.indexOf(label) < 0) { labels.push(label); }
+    });
+    return labels;
+  }
+
+  function inspectionResultRow(label, value, found) {
+    return '<div class="inspection-result-row ' + (found ? "is-found" : "is-missing") + '"><span class="inspection-result-state">' +
+      (found ? "Found" : "Not found") + '</span><strong>' + escapeHTML(label) + '</strong><span>' + escapeHTML(value || "—") + '</span></div>';
+  }
+
+  function showReleaseInspectionResult(stage, inspection) {
+    var node = document.getElementById("inspectionResults");
+    if (!node) { return; }
+    var metadata = inspection.metadata || {};
+    var architectures = metadata.architectures || stage.detected_architectures || [];
+    var warnings = inspection.warnings || [];
+    var iconFound = !!metadata.icon_data_url;
+    node.innerHTML =
+      '<h3>Inspection result</h3><p class="panel-help">Review what LegacyStore could and could not determine automatically. Missing values can be entered manually on the next step.</p>' +
+      '<div class="inspection-result-grid">' +
+      inspectionResultRow("Application name", metadata.name || stage.detected_name, !!(metadata.name || stage.detected_name)) +
+      inspectionResultRow("Bundle identifier", metadata.bundle_id || stage.detected_bundle_id, !!(metadata.bundle_id || stage.detected_bundle_id)) +
+      inspectionResultRow("Version", metadata.version || stage.detected_version, !!(metadata.version || stage.detected_version)) +
+      inspectionResultRow("Minimum OS X", metadata.minimum_os || stage.detected_min_os, !!(metadata.minimum_os || stage.detected_min_os)) +
+      inspectionResultRow("Architectures", humanArchitectureLabels(architectures).join(", "), architectures.length > 0) +
+      inspectionResultRow("Application icon", iconFound ? "Embedded icon detected" : "", iconFound) +
+      '</div>' +
+      (warnings.length ? '<div class="inspection-warning-list"><h4>Warnings</h4>' + warnings.map(function (warning) {
+        return '<div class="web-security-note">' + escapeHTML(warning.message || warning.code || "Unknown metadata warning") + '</div>';
+      }).join("") + '</div>' : '<div class="inspection-clean-note">No metadata warnings were reported.</div>');
+    node.hidden = false;
+
+    var iconNode = document.getElementById("detectedIcon");
+    if (iconNode && metadata.icon_data_url) {
+      iconNode.innerHTML = '<img src="' + escapeHTML(metadata.icon_data_url) + '" alt="">';
+    }
+    var metaNode = document.getElementById("detectedFileMeta");
+    if (metaNode) {
+      metaNode.textContent = formatSize(stage.size_bytes || 0) + " · SHA-256 " + (stage.sha256 || "");
+    }
+  }
+
   function renderReleaseUploadStepOne(app) {
     main.innerHTML =
       '<div class="view-title upload-page-title"><div><div class="muted">Release contribution for ' + escapeHTML(app.name || "Application") + '</div><h1>Upload Version</h1>' +
-      '<p class="view-subtitle">Step 1 of 2 — upload the package and let LegacyStore inspect it before release metadata is committed.</p></div>' +
+      '<p class="view-subtitle">Step 1 of 2 — upload the package, review the inspection result, then continue to release metadata.</p></div>' +
       '<button class="metal-button" data-route="manage-app/' + escapeHTML(app.id) + '" type="button">Back to Application</button></div>' +
       '<div class="contribution-steps"><div class="contribution-step is-active"><span>1</span><strong>Upload & Analyze</strong></div><div class="contribution-step"><span>2</span><strong>Release Metadata</strong></div></div>' +
       '<section class="bento-card contribution-upload-card"><div class="card-heading-row"><div><h2>Application package</h2><p class="card-kicker">DMG, PKG, ZIP or ISO</p></div><span class="status-chip" id="inspectionStatus">Waiting for file</span></div>' +
@@ -1504,7 +1603,10 @@ function renderUploads() {
       '<button class="artifact-dropzone" id="artifactDropZone" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>' +
       '<strong>Drop a release package here</strong><span>or click to choose a file</span><small>The server calculates SHA-256 and attempts to read Info.plist, version, minimum OS, icon and Mach-O architectures.</small></button>' +
       '<div class="detected-package" id="detectedPackage"><div class="detected-icon" id="detectedIcon"><span>APP</span></div><div><strong id="detectedFileName">No file selected</strong><p id="detectedFileMeta">Nothing has been uploaded yet.</p></div></div>' +
-      '<div class="upload-submit-actions"><div id="releaseUploadNotice" class="form-message"></div><button class="blue-button upload-primary-button" id="analyzeReleaseButton" type="button" disabled>Upload & Analyze</button></div></section>' +
+      '<div class="inspection-results" id="inspectionResults" hidden></div>' +
+      '<div class="upload-submit-actions"><div id="releaseUploadNotice" class="form-message"></div>' +
+      '<button class="blue-button upload-primary-button" id="analyzeReleaseButton" type="button" disabled>Upload & Analyze</button>' +
+      '<button class="blue-button upload-primary-button" id="continueReleaseButton" type="button" hidden>Continue</button></div></section>' +
       '<div class="upload-drop-overlay" id="uploadDropOverlay" hidden><div class="upload-drop-overlay-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg><strong>Drop release package</strong><span>The file will stay in quarantine until Step 2 is submitted.</span></div></div>';
 
     bindRouteButtons(main);
@@ -1514,51 +1616,90 @@ function renderUploads() {
   }
 
   function bindReleaseDropZone(app) {
-    var dropZone=document.getElementById("artifactDropZone");
-    var fileInput=document.getElementById("artifactFileInput");
-    var overlay=document.getElementById("uploadDropOverlay");
-    var analyze=document.getElementById("analyzeReleaseButton");
-    if(!dropZone||!fileInput||!overlay||!analyze){return;}
+    var dropZone = document.getElementById("artifactDropZone");
+    var fileInput = document.getElementById("artifactFileInput");
+    var overlay = document.getElementById("uploadDropOverlay");
+    var analyze = document.getElementById("analyzeReleaseButton");
+    var continueButton = document.getElementById("continueReleaseButton");
+    if (!dropZone || !fileInput || !overlay || !analyze || !continueButton) { return; }
 
-    function selectFile(file) {
-      if(!file){return;}
-      state.uploadContext.file=file;
-      var nameNode=document.getElementById("detectedFileName");
-      var metaNode=document.getElementById("detectedFileMeta");
-      if(nameNode){nameNode.textContent=file.name;}
-      if(metaNode){metaNode.textContent=formatSize(file.size)+" · ready to upload";}
-      analyze.disabled=false;
-      var status=document.getElementById("inspectionStatus");
-      if(status){status.textContent="Ready";}
+    function resetInspection() {
+      state.uploadContext.stageUid = "";
+      state.uploadContext.inspection = null;
+      state.uploadContext.iconDataURL = "";
+      var results = document.getElementById("inspectionResults");
+      if (results) { results.hidden = true; results.innerHTML = ""; }
+      continueButton.hidden = true;
+      analyze.hidden = false;
     }
 
-    dropZone.addEventListener("click",function(){fileInput.click();});
-    fileInput.addEventListener("change",function(){selectFile(fileInput.files&&fileInput.files[0]);});
-    var dragDepth=0;
-    main.ondragenter=function(event){event.preventDefault();dragDepth+=1;overlay.hidden=false;};
-    main.ondragover=function(event){event.preventDefault();if(event.dataTransfer){event.dataTransfer.dropEffect="copy";}};
-    main.ondragleave=function(event){event.preventDefault();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth){overlay.hidden=true;}};
-    main.ondrop=function(event){event.preventDefault();dragDepth=0;overlay.hidden=true;if(event.dataTransfer&&event.dataTransfer.files&&event.dataTransfer.files[0]){selectFile(event.dataTransfer.files[0]);}};
+    function selectFile(file) {
+      if (!file) { return; }
+      resetInspection();
+      state.uploadContext.file = file;
+      var nameNode = document.getElementById("detectedFileName");
+      var metaNode = document.getElementById("detectedFileMeta");
+      if (nameNode) { nameNode.textContent = file.name; }
+      if (metaNode) { metaNode.textContent = formatSize(file.size) + " · ready to upload"; }
+      analyze.disabled = false;
+      var status = document.getElementById("inspectionStatus");
+      if (status) { status.textContent = "Ready"; status.classList.remove("active"); }
+    }
 
-    analyze.addEventListener("click",function(){
-      var file=state.uploadContext.file;
-      if(!file){return;}
-      analyze.disabled=true;
-      var status=document.getElementById("inspectionStatus");
-      if(status){status.textContent="Uploading & analyzing...";}
-      showMessage("releaseUploadNotice","Uploading package to quarantine and reading metadata...",false);
-      var formData=new FormData();
-      formData.append("file",file,file.name);
-      api("/contributions/apps/"+encodeURIComponent(app.id)+"/stage",{method:"POST",body:formData}).then(function(payload){
-        state.uploadContext.stageUid=payload.stage&&payload.stage.uid?payload.stage.uid:"";
-        state.uploadContext.inspection=payload.inspection||{};
-        state.uploadContext.iconDataURL=payload.inspection&&payload.inspection.metadata?payload.inspection.metadata.icon_data_url||"":"";
-        renderReleaseMetadataStep(app,payload.stage||{},payload.inspection||{});
-      }).catch(function(error){
-        analyze.disabled=false;
-        if(status){status.textContent="Upload failed";}
-        showMessage("releaseUploadNotice",humanError(error),true);
+    dropZone.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () { selectFile(fileInput.files && fileInput.files[0]); });
+
+    var dragDepth = 0;
+    main.ondragenter = function (event) { event.preventDefault(); dragDepth += 1; overlay.hidden = false; };
+    main.ondragover = function (event) { event.preventDefault(); if (event.dataTransfer) { event.dataTransfer.dropEffect = "copy"; } };
+    main.ondragleave = function (event) { event.preventDefault(); dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) { overlay.hidden = true; } };
+    main.ondrop = function (event) {
+      event.preventDefault();
+      dragDepth = 0;
+      overlay.hidden = true;
+      if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) {
+        selectFile(event.dataTransfer.files[0]);
+      }
+    };
+
+    analyze.addEventListener("click", function () {
+      var file = state.uploadContext.file;
+      if (!file) { return; }
+      analyze.disabled = true;
+      var status = document.getElementById("inspectionStatus");
+      if (status) { status.textContent = "Uploading & analyzing..."; }
+      showMessage("releaseUploadNotice", "Uploading package to quarantine and reading metadata...", false);
+      var formData = new FormData();
+      formData.append("file", file, file.name);
+      api("/contributions/apps/" + encodeURIComponent(app.id) + "/stage", { method: "POST", body: formData }).then(function (payload) {
+        state.uploadContext.stageUid = payload.stage && payload.stage.uid ? payload.stage.uid : "";
+        state.uploadContext.inspection = payload.inspection || {};
+        state.uploadContext.iconDataURL = payload.inspection && payload.inspection.metadata ? payload.inspection.metadata.icon_data_url || "" : "";
+        showReleaseInspectionResult(payload.stage || {}, payload.inspection || {});
+        analyze.hidden = true;
+        continueButton.hidden = false;
+        if (status) { status.textContent = "Analysis complete"; status.classList.add("active"); }
+        showMessage("releaseUploadNotice", "Inspection complete. Review the result before continuing.", false);
+      }).catch(function (error) {
+        analyze.disabled = false;
+        if (status) { status.textContent = "Upload failed"; }
+        showMessage("releaseUploadNotice", humanError(error), true);
       });
+    });
+
+    continueButton.addEventListener("click", function () {
+      if (!state.uploadContext.stageUid) { return; }
+      renderReleaseMetadataStep(app, {
+        uid: state.uploadContext.stageUid,
+        original_filename: state.uploadContext.file ? state.uploadContext.file.name : "",
+        size_bytes: state.uploadContext.file ? state.uploadContext.file.size : 0,
+        sha256: ""
+      }, state.uploadContext.inspection || {});
+      api("/contributions/uploads/" + encodeURIComponent(state.uploadContext.stageUid)).then(function (payload) {
+        if (payload && payload.stage && document.getElementById("releaseMetadataForm")) {
+          renderReleaseMetadataStep(app, payload.stage, state.uploadContext.inspection || {});
+        }
+      }).catch(function () {});
     });
   }
 
@@ -1668,45 +1809,49 @@ function renderUploads() {
     return "";
   }
 
-  function bindReleaseMetadataForm(app,stage) {
-    var form=document.getElementById("releaseMetadataForm");
-    if(!form){return;}
-    form.addEventListener("submit",function(event){
+  function bindReleaseMetadataForm(app, stage) {
+    var form = document.getElementById("releaseMetadataForm");
+    if (!form) { return; }
+    form.addEventListener("submit", function (event) {
       event.preventDefault();
-      var imageError=validateReleaseImages(form);
-      if(imageError){showMessage("releaseMetadataNotice",imageError,true);return;}
-      var architectures=selectedArchitectures(form);
-      if(!architectures.length){showMessage("releaseMetadataNotice","Select at least one architecture.",true);return;}
-      var button=document.getElementById("commitReleaseButton");
-      button.disabled=true;
-      showMessage("releaseMetadataNotice","Creating release and artifact...",false);
-      var data=formJSON(form);
-      jsonRequest("POST","/contributions/uploads/"+encodeURIComponent(stage.uid||state.uploadContext.stageUid)+"/commit",{
-        version:data.version,
-        release_date:data.release_date||"",
-        changelog:data.changelog||"",
-        is_recommended:!!form.querySelector('[name="is_recommended"]:checked'),
-        min_os:data.min_os,
-        max_supported_os:data.max_supported_os||"",
-        max_tested_os:data.max_tested_os||"",
-        hard_block_above_max:!!form.querySelector('[name="hard_block_above_max"]:checked'),
-        architectures:architectures,
-        requires_rosetta:!!form.querySelector('[name="requires_rosetta"]:checked'),
-        requires_java:!!form.querySelector('[name="requires_java"]:checked'),
-        install_notes:data.install_notes||""
-      }).then(function(payload){
-        var release=payload.release||{};
-        state.uploadContext.versionId=String(release.version_id||"");
-        showMessage("releaseMetadataNotice","Release created. Processing version-specific images...",false);
-        return uploadReleaseIcon(app.id,release.version_id,form)
-          .then(function(){return uploadReleaseScreenshots(app.id,release.version_id,form);})
-          .then(function(){return release;});
-      }).then(function(release){
-        showToast("Release submitted successfully.", "success");
-        routeTo("manage-app/"+encodeURIComponent(app.id));
-      }).catch(function(error){
-        button.disabled=false;
-        showMessage("releaseMetadataNotice",humanError(error),true);
+      var imageError = validateReleaseImages(form);
+      if (imageError) { showMessage("releaseMetadataNotice", imageError, true); return; }
+      var architectures = selectedArchitectures(form);
+      if (!architectures.length) { showMessage("releaseMetadataNotice", "Select at least one architecture.", true); return; }
+      var button = document.getElementById("commitReleaseButton");
+      button.disabled = true;
+      showMessage("releaseMetadataNotice", "Creating release and artifact...", false);
+      var data = formJSON(form);
+      jsonRequest("POST", "/contributions/uploads/" + encodeURIComponent(stage.uid || state.uploadContext.stageUid) + "/commit", {
+        version: data.version,
+        release_date: data.release_date || "",
+        changelog: data.changelog || "",
+        is_recommended: !!form.querySelector('[name="is_recommended"]:checked'),
+        min_os: data.min_os,
+        max_supported_os: data.max_supported_os || "",
+        max_tested_os: data.max_tested_os || "",
+        hard_block_above_max: !!form.querySelector('[name="hard_block_above_max"]:checked'),
+        architectures: architectures,
+        requires_rosetta: !!form.querySelector('[name="requires_rosetta"]:checked'),
+        requires_java: !!form.querySelector('[name="requires_java"]:checked'),
+        install_notes: data.install_notes || ""
+      }).then(function (payload) {
+        var release = payload.release || {};
+        state.uploadContext.versionId = String(release.version_id || "");
+        showMessage("releaseMetadataNotice", "Release created. Processing version-specific images...", false);
+        return uploadReleaseIcon(app.id, release.version_id, form)
+          .then(function () { return uploadReleaseScreenshots(app.id, release.version_id, form); })
+          .then(function () { return release; });
+      }).then(function (release) {
+        if (release.moderation_status === "pending") {
+          showToast("Release submitted. It will become public after moderation.", "success");
+        } else {
+          showToast("Release published.", "success");
+        }
+        routeTo("manage-app/" + encodeURIComponent(app.id));
+      }).catch(function (error) {
+        button.disabled = false;
+        showMessage("releaseMetadataNotice", humanError(error), true);
       });
     });
   }
