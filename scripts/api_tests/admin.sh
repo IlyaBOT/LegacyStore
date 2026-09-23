@@ -46,7 +46,37 @@ test_admin_moderation() {
     return
   fi
 
-  APP_SLUG="api-upload-$(date +%s)-$$"
+  api_request GET '/api/v1/admin/apps' 1 "$UPLOADER_TOKEN"
+  if ! status_is 403 || ! jq_ok '.error == "forbidden"'; then
+    err "$NAME" AdminListIsolation 'uploader cannot enumerate unpublished admin catalog' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST '/api/v1/admin/apps/1/versions' 1 "$UPLOADER_TOKEN" '{"version":"forbidden-direct-version"}'
+  if ! status_is 403 || ! jq_ok '.error == "forbidden"'; then
+    err "$NAME" RawVersionMutation 'uploader must use staged contribution workflow' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST '/api/v1/admin/versions/1/artifacts' 1 "$UPLOADER_TOKEN" '{}'
+  if ! status_is 403 || ! jq_ok '.error == "forbidden"'; then
+    err "$NAME" RawArtifactMutation 'raw artifact API is moderator-only' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST '/api/v1/admin/versions/1/upload' 1 "$UPLOADER_TOKEN" '{}'
+  if ! status_is 403 || ! jq_ok '.error == "forbidden"'; then
+    err "$NAME" LegacyDirectUpload 'legacy direct upload API is moderator-only' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST '/api/v1/admin/apps/1/icons' 1 "$UPLOADER_TOKEN" '{"image_url":"https://example.invalid/untrusted.svg","min_os":"10.4","max_os":"10.15"}'
+  if ! status_is 403 || ! jq_ok '.error == "forbidden"'; then
+    err "$NAME" RawIconMutation 'raw icon URL API is moderator-only' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  APP_SLUG="api-upload-$(date +%s)-$"
   BUNDLE_ID="com.legacy.apiupload.$(date +%s).$$"
   api_request POST '/api/v1/admin/apps' 1 "$UPLOADER_TOKEN" "{\"slug\":\"$APP_SLUG\",\"name\":\"API Uploaded App\",\"bundle_id\":\"$BUNDLE_ID\",\"developer_name\":\"LegacyStore\",\"summary\":\"API moderation smoke test\",\"description\":\"Temporary app for moderation smoke test.\",\"website_url\":\"https://example.invalid/app\",\"source_url\":\"https://github.com/example/legacy-app\",\"category_slug\":\"utilities\"}"
   if ! status_is 200 || ! jq_ok '.app.id and .app.moderation_status == "pending" and .app.website_url and .app.source_url'; then
