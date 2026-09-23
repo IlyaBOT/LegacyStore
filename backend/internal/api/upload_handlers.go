@@ -158,7 +158,7 @@ func (r *Router) adminInspectAppBundle(w http.ResponseWriter, req *http.Request)
 }
 
 func (r *Router) adminUploadArtifact(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
