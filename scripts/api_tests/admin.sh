@@ -91,7 +91,7 @@ test_admin_moderation() {
   fi
 
   api_request GET "/api/v1/contributions/uploads/$STAGE_UID" 1 "$UPLOADER_TOKEN"
-  if ! status_is 200 || ! jq_ok --arg uid "$STAGE_UID" '.stage.uid == $uid and .stage.status == "staged"'; then
+  if ! status_is 200 || ! jq -e --arg uid "$STAGE_UID" '.stage.uid == $uid and .stage.status == "staged"' "$BODY_FILE" >/dev/null 2>&1; then
     err "$NAME" ReadStage 'staged upload belongs to uploader' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi
