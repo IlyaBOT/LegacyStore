@@ -6,6 +6,7 @@ on:
       - main
       - feature/backend-native-10.4
       - feat/contribution-wizard-architectures
+      - feat/go-ssr-frontend
   pull_request:
     paths:
       - 'backend/**'
@@ -47,9 +48,27 @@ jobs:
       - name: Build
         run: go build ./cmd/legacystore-backend
 
-      - name: Validate web JavaScript
+      - name: Validate Safari 5 SSR frontend baseline
         working-directory: .
-        run: node --check admin-web/static/app.js
+        run: |
+          set -euo pipefail
+          test -s backend/internal/webui/templates/layout.html
+          test -s backend/internal/webui/templates/home.html
+          test -s backend/internal/webui/templates/auth.html
+          test -s backend/internal/webui/templates/profile.html
+          test -s backend/internal/webui/templates/admin_dashboard.html
+          test -s backend/internal/webui/templates/admin_moderation.html
+          test -s backend/internal/webui/templates/admin_system.html
+          test -s backend/internal/webui/assets/site.css
+          test -s backend/internal/webui/assets/site.js
+          if grep -Eq 'fetch[[:space:]]*\(|Promise|=>|(^|[^[:alnum:]_])(const|let|async)[[:space:]]' backend/internal/webui/assets/site.js; then
+            echo "Modern JavaScript found in Safari 5 baseline."
+            exit 1
+          fi
+          if grep -Eq 'display:[[:space:]]*(grid|flex)|grid-template|--[a-zA-Z0-9_-]+:' backend/internal/webui/assets/site.css; then
+            echo "Modern layout primitive found in Safari 5 baseline."
+            exit 1
+          fi
 
       - name: Validate shell scripts
         working-directory: .
@@ -58,9 +77,6 @@ jobs:
       - name: Validate nginx configuration inputs
         working-directory: .
         run: |
-          test -s admin-web/static/index.html
-          test -s admin-web/static/styles.css
-          test -s admin-web/static/ui-fixes.css
           test -s admin-web/nginx.conf
           grep -q 'proxy_request_buffering off' admin-web/nginx.conf
           grep -q 'Content-Security-Policy' admin-web/nginx.conf
@@ -99,7 +115,7 @@ jobs:
       ADMIN_NICKNAME: CI Administrator
       API_TEST_ADMIN_EMAIL: ci-admin@legacystore.local
       API_TEST_ADMIN_PASSWORD: 'CI-Admin-Password-2026!'
-      RECOVERY_BASE_URL: https://localhost:8443/account/recovery
+      RECOVERY_BASE_URL: https://localhost:8443/account
       RECOVERY_DEBUG_RETURN_TOKEN: 'true'
     steps:
       - name: Checkout
@@ -208,7 +224,7 @@ jobs:
       - name: Validate nginx configuration
         run: |
           set -euo pipefail
-          docker run --rm             --add-host backend:127.0.0.1             -v "$PWD/admin-web/static:/usr/share/nginx/html:ro"             -v "$PWD/admin-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro"             -v "$PWD/admin-web/certs:/etc/nginx/certs:ro"             nginx:1.27-alpine nginx -t
+          docker run --rm             --add-host backend:127.0.0.1 -v "$PWD/admin-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro"             -v "$PWD/admin-web/certs:/etc/nginx/certs:ro"             nginx:1.27-alpine nginx -t
 
       - name: Start HTTPS web proxy
         run: |
@@ -217,7 +233,6 @@ jobs:
             --add-host backend:host-gateway \
             -p 8081:80 \
             -p 8443:443 \
-            -v "$PWD/admin-web/static:/usr/share/nginx/html:ro" \
             -v "$PWD/admin-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$PWD/admin-web/certs:/etc/nginx/certs:ro" \
             nginx:1.27-alpine

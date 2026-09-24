@@ -44,7 +44,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
-      RECOVERY_BASE_URL: ${RECOVERY_BASE_URL:-https://localhost:8443/account/recovery}
+      RECOVERY_BASE_URL: ${RECOVERY_BASE_URL:-https://localhost:8443/account}
       RECOVERY_DEBUG_RETURN_TOKEN: ${RECOVERY_DEBUG_RETURN_TOKEN:-false}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
@@ -70,7 +70,6 @@ services:
       - "${ADMIN_WEB_PORT:-8081}:80"
       - "${ADMIN_WEB_HTTPS_PORT:-8443}:443"
     volumes:
-      - ./admin-web/static:/usr/share/nginx/html:ro
       - ./admin-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./admin-web/certs:/etc/nginx/certs:ro
     depends_on:

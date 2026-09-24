@@ -1,11 +1,18 @@
-# LegacyStore Web Client
+# LegacyStore Web
 
-Static web client for browsing the LegacyStore catalog.
+The browser UI is server-rendered by the Go backend in backend/internal/webui.
 
-The UI is served by nginx on port 8081 and HTTPS port 8443. The same nginx
-service proxies `/api/` to the Go backend service, so browser requests can use
-relative API URLs.
+nginx is intentionally only the public HTTP/TLS reverse proxy. It does not
+render or serve a separate SPA bundle anymore. HTML templates, the Safari-5
+baseline stylesheet and the small ES5 progressive-enhancement script are
+embedded into the Go binary.
 
-Authentication, profile, legacy passwords, reviews and moderation screens are
-present in the UI. Authenticated actions are intentionally blocked outside
-working HTTPS/TLS.
+Public browser flow:
+
+    Browser -> nginx TLS/reverse proxy -> Go webui -> catalog/account stores -> PostgreSQL
+
+The REST API remains available under /api/v1/ for the native legacy client,
+automation and integrations.
+
+The SSR baseline is designed to remain functional without JavaScript. The
+embedded JavaScript only adds non-essential confirmation behavior.

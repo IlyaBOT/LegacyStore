@@ -19,9 +19,24 @@
     <button class="blue-button" type="submit">Создать</button>
   </form>
 </div>
-<div class="panel table-scroll"><table><thead><tr><th>ID</th><th>Email</th><th>Имя</th><th>Роли</th><th>Статус</th><th></th></tr></thead><tbody>
-{{range .Users}}<tr><form method="post" action="/admin/system/users/{{.ID}}/update"><td>{{.ID}}</td><td>{{.Email}}</td><td><input name="nickname" value="{{.Nickname}}"></td><td><input type="hidden" name="current_roles" value="{{join .Roles}}"><select name="role"><option value="">—</option><option>user</option><option>uploader</option><option>trusted</option><option>moder</option></select><small>{{roles .Roles}}</small></td><td><select name="status"><option {{if eq .Status "active"}}selected{{end}}>active</option><option {{if eq .Status "pending"}}selected{{end}}>pending</option><option {{if eq .Status "disabled"}}selected{{end}}>disabled</option></select><label class="mini-check"><input type="checkbox" name="email_verified" value="1" {{if .EmailVerified}}checked{{end}}> verified</label></td><td class="actions"><button type="submit">Сохранить</button></form><form class="inline-form confirm-danger" method="post" action="/admin/system/users/{{.ID}}/delete"><button class="danger" type="submit">Удалить</button></form></td></tr>{{end}}
-</tbody></table></div>
+{{range .Users}}
+<div class="panel record user-record">
+  <form method="post" action="/admin/system/users/{{.ID}}/update">
+    <h3>#{{.ID}} {{.Email}}</h3>
+    <input type="hidden" name="current_roles" value="{{join .Roles}}">
+    <div class="form-row">
+      <label>Имя<input name="nickname" value="{{.Nickname}}"></label>
+      <label>Статус<select name="status"><option {{if eq .Status "active"}}selected{{end}}>active</option><option {{if eq .Status "pending"}}selected{{end}}>pending</option><option {{if eq .Status "disabled"}}selected{{end}}>disabled</option></select></label>
+      <label>Добавить роль<select name="role"><option value="">—</option><option>user</option><option>uploader</option><option>trusted</option><option>moder</option></select></label>
+      <div class="clear"></div>
+    </div>
+    <p class="help">Роли: {{roles .Roles}}</p>
+    <label class="mini-check"><input type="checkbox" name="email_verified" value="1" {{if .EmailVerified}}checked{{end}}> Email подтверждён</label>
+    <button type="submit">Сохранить</button>
+  </form>
+  <form class="confirm-danger delete-line" method="post" action="/admin/system/users/{{.ID}}/delete"><button class="danger" type="submit">Удалить аккаунт</button></form>
+</div>
+{{end}}
 
 {{else if eq .SystemTab "apps"}}
 <div class="panel"><h2>Создать приложение</h2><form class="wide-form" method="post" action="/admin/system/apps/create">
@@ -31,7 +46,7 @@
 {{range .AdminApps}}<div class="panel record"><form method="post" action="/admin/system/apps/{{.ID}}/update"><h3>#{{.ID}} {{.Name}}</h3><div class="form-row"><label>Slug<input name="slug" value="{{.Slug}}"></label><label>Название<input name="name" value="{{.Name}}"></label><label>Разработчик<input name="developer_name" value="{{.DeveloperName}}"></label></div><label>Summary<input name="summary" value="{{.Summary}}"></label><label>Description<textarea name="description">{{.Description}}</textarea></label><div class="form-row"><label>Website<input name="website_url" value="{{.WebsiteURL}}"></label><label>Source<input name="source_url" value="{{.SourceURL}}"></label><label>Статус<select name="moderation_status"><option {{if eq .ModerationStatus "pending"}}selected{{end}}>pending</option><option {{if eq .ModerationStatus "approved"}}selected{{end}}>approved</option><option {{if eq .ModerationStatus "rejected"}}selected{{end}}>rejected</option></select></label></div><button type="submit">Сохранить</button></form><form class="confirm-danger delete-line" method="post" action="/admin/system/apps/{{.ID}}/delete"><button class="danger" type="submit">Удалить приложение</button></form></div>{{end}}
 
 {{else if eq .SystemTab "uploads"}}
-<div class="panel"><h2>Создать запись загрузки</h2><form class="wide-form" method="post" action="/admin/system/uploads/create"><div class="form-row"><label>Version ID<input name="version_id" required></label><label>Файл<input name="file_name" required></label><label>Тип<input name="package_type" placeholder="dmg/pkg/zip" required></label></div><div class="form-row"><label>Source<select name="source_type"><option>external</option><option>local</option></select></label><label>URL<input name="download_url"></label><label>Storage path<input name="storage_path"></label></div><div class="form-row"><label>Min OS<input name="min_os" value="10.4"></label><label>Max supported<input name="max_supported_os"></label><label>Architectures<input name="architectures" value="i386,x86_64"></label></div><label>SHA-256<input name="sha256"></label><label>Install notes<textarea name="install_notes"></textarea></label><button class="blue-button" type="submit">Создать</button></form></div>
+<div class="panel"><h2>Создать запись загрузки</h2><form class="wide-form" method="post" action="/admin/system/uploads/create"><div class="form-row"><label>Version ID<input name="version_id" required></label><label>Файл<input name="file_name" required></label><label>Тип<input name="package_type" placeholder="dmg/pkg/zip" required></label></div><div class="form-row"><label>Source<select name="source_type"><option value="external_direct">external_direct</option><option value="external_page">external_page</option><option value="local">local</option></select></label><label>URL<input name="download_url"></label><label>Storage path<input name="storage_path"></label></div><div class="form-row"><label>Min OS<input name="min_os" value="10.4"></label><label>Max supported<input name="max_supported_os"></label><label>Architectures<input name="architectures" value="i386,x86_64"></label></div><label>SHA-256<input name="sha256"></label><label>Install notes<textarea name="install_notes"></textarea></label><button class="blue-button" type="submit">Создать</button></form></div>
 {{range .Artifacts}}<div class="panel record"><form method="post" action="/admin/system/uploads/{{.ID}}/update"><h3>#{{.ID}} {{.AppName}} {{.Version}} — {{.FileName}}</h3><div class="form-row"><label>Файл<input name="file_name" value="{{.FileName}}"></label><label>Тип<input name="package_type" value="{{.PackageType}}"></label><label>Source<input name="source_type" value="{{.SourceType}}"></label></div><div class="form-row"><label>URL<input name="download_url" value="{{.PrimaryDownloadURL}}"></label><label>Min OS<input name="min_os" value="{{.MinOS}}"></label><label>Max supported<input name="max_supported_os" value="{{.MaxSupportedOS}}"></label></div><div class="form-row"><label>Max tested<input name="max_tested_os" value="{{.MaxTestedOS}}"></label><label>Architectures<input name="architectures" value="{{join .Architectures}}"></label><label>Статус<input name="moderation_status" value="{{.ModerationStatus}}"></label></div><label>Install notes<textarea name="install_notes">{{.InstallNotes}}</textarea></label><button type="submit">Сохранить</button></form><form class="confirm-danger delete-line" method="post" action="/admin/system/uploads/{{.ID}}/delete"><button class="danger" type="submit">Удалить загрузку</button></form></div>{{end}}
 
 {{else if eq .SystemTab "reviews"}}
