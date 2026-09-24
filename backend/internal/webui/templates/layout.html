@@ -1,0 +1,71 @@
+{{define "layout"}}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Title}}{{.Title}} — {{end}}LegacyStore</title>
+  <link rel="stylesheet" href="/assets/site.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body>
+<div class="site-shell">
+  <div class="topbar">
+    <div class="history-controls">
+      <button class="history-button previous" id="historyBack" type="button" title="Назад"><span>Назад</span></button><button class="history-button next" id="historyForward" type="button" title="Вперёд"><span>Вперёд</span></button>
+    </div>
+
+    <div class="toolbar">
+      <a class="tool {{if eq .Active "home"}}active{{end}}" href="/">
+        <span class="tool-icon icon-featured">✦</span><span class="tool-label">Featured</span>
+      </a>
+      <a class="tool {{if eq .Active "top-charts"}}active{{end}}" href="/top-charts">
+        <span class="tool-icon icon-charts">★</span><span class="tool-label">Top Charts</span>
+      </a>
+      <a class="tool {{if eq .Active "categories"}}active{{end}}" href="/categories">
+        <span class="tool-icon icon-categories">▤</span><span class="tool-label">Categories</span>
+      </a>
+    </div>
+
+    <form class="search" action="/search" method="get">
+      <span class="search-mark">⌕</span>
+      <input type="search" name="q" value="{{.Query}}" placeholder="Поиск">
+    </form>
+  </div>
+
+  <div class="body">
+    <div class="sidebar">
+      <div class="side-title">Магазин</div>
+      <a class="side-link {{if eq .Active "home"}}active{{end}}" href="/">Featured</a>
+      <a class="side-link {{if eq .Active "top-charts"}}active{{end}}" href="/top-charts">Top Charts</a>
+      <a class="side-link {{if eq .Active "categories"}}active{{end}}" href="/categories">Categories</a>
+
+      <div class="side-title">Аккаунт</div>
+      {{if .User}}
+        <a class="side-link {{if eq .Active "profile"}}active{{end}}" href="/account/profile">{{if .User.Nickname}}{{.User.Nickname}}{{else}}{{.User.Email}}{{end}}</a>
+        <form action="/account/logout" method="post"><button class="side-button" type="submit">Выйти</button></form>
+      {{else}}
+        <a class="side-link {{if eq .Active "account"}}active{{end}}" href="/account">Авторизация</a>
+      {{end}}
+
+      {{if or (hasRole .User "moder") (hasRole .User "admin")}}
+      <div class="side-title">Управление</div>
+      <a class="side-link {{if eq .Active "admin"}}active{{end}}" href="/admin">Dashboard</a>
+      <a class="side-link {{if eq .Active "moderation"}}active{{end}}" href="/admin/moderation">Модерация</a>
+      {{if hasRole .User "admin"}}<a class="side-link {{if eq .Active "system"}}active{{end}}" href="/admin/system">Система</a>{{end}}
+      {{end}}
+    </div>
+    <div class="content">
+      {{if .Notice}}<div class="notice success">{{.Notice}}</div>{{end}}
+      {{template "content" .}}
+    </div>
+    <div class="clear"></div>
+  </div>
+
+  <div class="statusbar">
+    <span>LegacyStore</span>
+    <span class="status-right">Server Rendered · Classic WebKit compatible</span>
+    <div class="clear"></div>
+  </div>
+</div>
+</body>
+</html>{{end}}

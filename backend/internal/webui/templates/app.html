@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .App}}
+<div class="app-detail-head">
+  <div class="detail-icon">{{if .Icon}}<img src="{{.Icon}}" alt="">{{else}}<b>{{initial .Name}}</b>{{end}}</div>
+  <div class="detail-copy">
+    <div class="detail-category">{{.Category}}</div>
+    <h1>{{.Name}}</h1>
+    <p class="detail-developer">{{.DeveloperName}}</p>
+    <p>{{.Summary}}</p>
+    <div class="detail-stats">★ {{printf "%.1f" .Rating}} ({{.RatingCount}}) · {{.Downloads}} загрузок · {{.Views}} просмотров</div>
+  </div>
+</div>
+
+<div class="columns">
+  <div class="column-main">
+    <div class="panel">
+      <h2>Описание</h2>
+      {{if .Description}}<p class="preline">{{.Description}}</p>{{else}}<p class="help">Описание пока не добавлено.</p>{{end}}
+      {{if or .WebsiteURL .SourceURL}}<p class="external-links">{{if .WebsiteURL}}<a href="{{.WebsiteURL}}">Сайт разработчика</a>{{end}}{{if .SourceURL}} <a href="{{.SourceURL}}">Исходный код</a>{{end}}</p>{{end}}
+    </div>
+
+    {{if .Screenshots}}
+    <div class="panel">
+      <h2>Скриншоты</h2>
+      <div class="screenshots">{{range .Screenshots}}<a href="{{.ImageURL}}"><img src="{{.ImageURL}}" alt="{{.Caption}}"></a>{{end}}</div>
+    </div>
+    {{end}}
+
+    <div class="panel">
+      <h2>Версии</h2>
+      {{range .Versions}}
+      <div class="version">
+        <div class="version-head"><strong>{{.Version}}</strong>{{if .IsRecommended}} <span class="badge">recommended</span>{{end}} <small>{{.ReleaseDate}} · {{.Downloads}} загрузок</small></div>
+        {{if .Changelog}}<p class="preline">{{.Changelog}}</p>{{end}}
+        <table class="artifact-table">
+          <thead><tr><th>Файл</th><th>Система</th><th>Архитектура</th><th></th></tr></thead>
+          <tbody>{{range .Artifacts}}<tr>
+            <td>{{.FileName}}<br><small>{{.PackageType}}</small></td>
+            <td>OS X {{.MinOS}}{{if .MaxSupportedOS}} — {{.MaxSupportedOS}}{{end}}</td>
+            <td>{{join .ArchitectureLabels}}</td>
+            <td class="actions"><a class="blue-button small" href="/download/{{.ID}}">Скачать</a></td>
+          </tr>{{end}}</tbody>
+        </table>
+      </div>
+      {{else}}<p class="help">Опубликованных версий пока нет.</p>{{end}}
+    </div>
+
+    <div class="panel">
+      <h2>Отзывы</h2>
+      {{range $.AppReviews}}
+      <div class="review"><strong>{{.Author}}</strong> <span class="rating">{{.Rating}}/5</span>{{if .Title}}<h3>{{.Title}}</h3>{{end}}<p>{{.Body}}</p><small>{{.CreatedAt}}</small></div>
+      {{else}}<p class="help">Отзывов пока нет.</p>{{end}}
+    </div>
+  </div>
+  <div class="column-side">
+    <div class="panel info-list">
+      <h2>Информация</h2>
+      <p><b>Разработчик</b><span>{{.DeveloperName}}</span></p>
+      <p><b>Категория</b><span>{{.Category}}</span></p>
+      {{if .BundleID}}<p><b>Bundle ID</b><span>{{.BundleID}}</span></p>{{end}}
+      {{if .LicenseType}}<p><b>Лицензия</b><span>{{.LicenseType}}</span></p>{{end}}
+      <p><b>Системные требования</b>
+        {{with .RecommendedArtifact}}
+          <span>OS X {{.MinOS}}{{if .MaxSupportedOS}} — {{.MaxSupportedOS}}{{else}} или новее{{end}}</span>
+          {{if .ArchitectureLabels}}<span>{{join .ArchitectureLabels}}</span>{{end}}
+        {{else}}
+          <span>Нет опубликованной сборки</span>
+        {{end}}
+      </p>
+    </div>
+  </div>
+  <div class="clear"></div>
+</div>
+{{end}}
+{{end}}

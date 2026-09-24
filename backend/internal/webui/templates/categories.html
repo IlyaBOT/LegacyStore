@@ -1,0 +1,8 @@
+{{define "content"}}
+<div class="page-head store-heading"><h1>Categories</h1><p>Категории приложений в каталоге.</p></div>
+<div class="category-list">
+{{range .Categories}}
+  <a class="category-tile" href="/search?category={{.Slug}}"><span class="category-icon">▤</span><strong>{{.Name}}</strong></a>
+{{else}}<div class="empty">Категории пока не созданы.</div>{{end}}
+</div>
+{{end}}
