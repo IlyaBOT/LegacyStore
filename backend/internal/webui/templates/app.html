@@ -59,7 +59,14 @@
       <p><b>Категория</b><span>{{.Category}}</span></p>
       {{if .BundleID}}<p><b>Bundle ID</b><span>{{.BundleID}}</span></p>{{end}}
       {{if .LicenseType}}<p><b>Лицензия</b><span>{{.LicenseType}}</span></p>{{end}}
-      <p><b>Совместимость</b><span>{{.Compatibility.Label}}</span></p>
+      <p><b>Системные требования</b>
+        {{with .RecommendedArtifact}}
+          <span>OS X {{.MinOS}}{{if .MaxSupportedOS}} — {{.MaxSupportedOS}}{{else}} или новее{{end}}</span>
+          {{if .ArchitectureLabels}}<span>{{join .ArchitectureLabels}}</span>{{end}}
+        {{else}}
+          <span>Нет опубликованной сборки</span>
+        {{end}}
+      </p>
     </div>
   </div>
   <div class="clear"></div>

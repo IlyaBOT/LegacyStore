@@ -3,8 +3,8 @@
 <div class="rank-list">
 {{range $index, $app := .Apps}}
   <a class="rank-row" href="/app/{{$app.Slug}}">
-    <span class="rank-number">{{printf "%d" $index}}</span>
-    <span class="rank-icon">{{if $app.Icon}}<img src="{{$app.Icon}}" alt="">{{else}}<b>{{initial $app.Name}}</b>{{end}}</span>
+    <span class="rank-number">{{inc $index}}</span>
+    <span class="rank-icon"><b class="app-icon-fallback">{{initial $app.Name}}</b>{{if $app.Icon}}<img class="app-icon-image" src="{{$app.Icon}}" alt="">{{end}}</span>
     <span class="rank-copy"><strong>{{$app.Name}}</strong><small>{{$app.Category}}</small><em>{{$app.Summary}}</em></span>
     <span class="rank-meta">★ {{printf "%.1f" $app.Rating}}<br>{{$app.Downloads}} загрузок</span>
   </a>

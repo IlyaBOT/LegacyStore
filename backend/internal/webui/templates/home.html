@@ -1,16 +1,26 @@
 {{define "content"}}
 {{if .IsSearch}}
-  <div class="page-head"><h1>Поиск</h1><p>{{if .Query}}Результаты для «{{.Query}}»{{else}}Введите запрос в поле поиска.{{end}}</p></div>
+  <div class="page-head"><h1>Поиск</h1><p>{{if .Query}}Результаты для «{{.Query}}»{{else}}Каталог приложений LegacyStore.{{end}}</p></div>
   <div class="app-list">
-    {{range .Apps}}{{template "app-card" .}}{{else}}{{if .Query}}<div class="empty">Ничего не найдено.</div>{{end}}{{end}}
+    {{range .Apps}}{{template "app-card" .}}{{else}}<div class="empty">Ничего не найдено.</div>{{end}}
   </div>
 {{else}}
   {{if .Home}}
-    {{if .Home.Slides}}
     <div class="home-carousel" id="homeCarousel">
       <div class="home-carousel-stage">
+        <div class="home-carousel-slide welcome-slide is-active" data-carousel-slide>
+          <img class="welcome-carousel-art" src="/assets/catalog-hero.png" alt="">
+          <div class="welcome-carousel-shade"></div>
+          <div class="home-carousel-content welcome-carousel-content">
+            <span class="carousel-eyebrow">Legacy software, modern archive</span>
+            <h1>Welcome to LegacyStore!</h1>
+            <p>A community-built App Store interpretation for classic Mac OS X and legacy macOS. Discover, preserve and download software made for Macs Apple left behind.</p>
+            <a class="blue-button" href="/categories">Explore catalog</a>
+          </div>
+        </div>
+
         {{range $index, $slide := .Home.Slides}}
-        <div class="home-carousel-slide {{if eq $index 0}}is-active{{end}}" data-carousel-slide>
+        <div class="home-carousel-slide" data-carousel-slide>
           {{if $slide.App.HeroImage}}
             <img class="home-carousel-art hero-shot" src="{{$slide.App.HeroImage}}" alt="">
           {{else if $slide.App.Icon}}
@@ -29,26 +39,29 @@
       <button class="carousel-arrow carousel-previous" id="carouselPrevious" type="button" title="Предыдущий слайд"><span>‹</span></button>
       <button class="carousel-arrow carousel-next" id="carouselNext" type="button" title="Следующий слайд"><span>›</span></button>
       <div class="home-carousel-dots">
-        {{range $index, $slide := .Home.Slides}}<button class="home-carousel-dot {{if eq $index 0}}is-active{{end}}" data-carousel-index="{{$index}}" type="button" title="Слайд"></button>{{end}}
+        <button class="home-carousel-dot is-active" data-carousel-index="0" type="button" title="Welcome"></button>
+        {{range $index, $slide := .Home.Slides}}<button class="home-carousel-dot" data-carousel-index="{{inc $index}}" type="button" title="{{$slide.App.Name}}"></button>{{end}}
       </div>
     </div>
-    {{end}}
 
     <div class="section-title"><h2>Популярное</h2><a href="/top-charts">Показать всё</a></div>
     <div class="app-list">{{range .Home.Popular}}{{template "app-card" .}}{{else}}<div class="empty">Каталог пока пуст.</div>{{end}}</div>
 
     <div class="section-title"><h2>Новые релизы</h2></div>
-    <div class="app-list">{{range .Home.NewReleases}}{{template "app-card" .}}{{end}}</div>
+    <div class="app-list">{{range .Home.NewReleases}}{{template "app-card" .}}{{else}}<div class="empty">Новых релизов пока нет.</div>{{end}}</div>
 
     <div class="section-title"><h2>Больше всего загрузок</h2></div>
-    <div class="app-list">{{range .Home.TopDownloads}}{{template "app-card" .}}{{end}}</div>
+    <div class="app-list">{{range .Home.TopDownloads}}{{template "app-card" .}}{{else}}<div class="empty">Загрузок пока нет.</div>{{end}}</div>
   {{end}}
 {{end}}
 {{end}}
 
 {{define "app-card"}}
 <a class="app-card" href="/app/{{.Slug}}">
-  <span class="app-icon">{{if .Icon}}<img src="{{.Icon}}" alt="">{{else}}<b>{{initial .Name}}</b>{{end}}</span>
+  <span class="app-icon">
+    <b class="app-icon-fallback">{{initial .Name}}</b>
+    {{if .Icon}}<img class="app-icon-image" src="{{.Icon}}" alt="">{{end}}
+  </span>
   <span class="app-copy"><strong>{{.Name}}</strong><small>{{.Category}}</small><em>{{.Summary}}</em></span>
   <span class="app-meta">★ {{printf "%.1f" .Rating}} · {{.Downloads}} загрузок</span>
 </a>

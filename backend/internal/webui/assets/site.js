@@ -124,9 +124,28 @@
     start();
   }
 
+  function wireImageFallbacks() {
+    var images = document.getElementsByTagName("img");
+    var i;
+    for (i = 0; i < images.length; i += 1) {
+      if (hasClass(images[i], "app-icon-image")) {
+        images[i].onerror = function () {
+          addClass(this.parentNode, "is-broken");
+        };
+        images[i].onload = function () {
+          removeClass(this.parentNode, "is-broken");
+        };
+        if (images[i].complete && typeof images[i].naturalWidth !== "undefined" && images[i].naturalWidth === 0) {
+          addClass(images[i].parentNode, "is-broken");
+        }
+      }
+    }
+  }
+
   function wire() {
     wireDangerForms();
     wireHistory();
+    wireImageFallbacks();
     wireCarousel();
   }
 

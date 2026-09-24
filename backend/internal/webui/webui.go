@@ -81,6 +81,7 @@ func New(cfg config.Config, catalogStore *catalog.Store, userStore *account.Stor
 		},
 		"roles": func(values []string) string { return strings.Join(values, ", ") },
 		"join":  func(values []string) string { return strings.Join(values, ",") },
+		"inc":   func(value int) int { return value + 1 },
 		"initial": func(value string) string {
 			value = strings.TrimSpace(value)
 			if value == "" {
@@ -293,7 +294,7 @@ func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *Handler) appDetail(w http.ResponseWriter, req *http.Request) {
-	data := h.baseData(req, "Приложение", "categories")
+	data := h.baseData(req, "Приложение", "")
 	if h.catalog == nil {
 		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
 		return
