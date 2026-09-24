@@ -276,10 +276,12 @@ func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	data.Query = strings.TrimSpace(req.URL.Query().Get("q"))
+	category := strings.TrimSpace(req.URL.Query().Get("category"))
+	sortMode := strings.TrimSpace(req.URL.Query().Get("sort"))
 	data.IsSearch = true
-	if data.Query != "" {
+	if data.Query != "" || category != "" || sortMode != "" {
 		apps, err := h.catalog.Apps(req.Context(), catalog.Filters{
-			Page: 1, Limit: 48, Query: data.Query, Sort: strings.TrimSpace(req.URL.Query().Get("sort")),
+			Page: 1, Limit: 48, Query: data.Query, Category: category, Sort: sortMode,
 		})
 		if err != nil {
 			h.renderError(w, req, http.StatusInternalServerError, "Поиск не удался.")
