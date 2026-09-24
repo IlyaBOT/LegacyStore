@@ -56,6 +56,8 @@ type adminAppPayload struct {
 	DeveloperName    string `json:"developer_name"`
 	Summary          string `json:"summary"`
 	Description      string `json:"description"`
+	WebsiteURL       string `json:"website_url"`
+	SourceURL        string `json:"source_url"`
 	CategorySlug     string `json:"category_slug"`
 	ModerationStatus string `json:"moderation_status"`
 }

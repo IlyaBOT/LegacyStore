@@ -64,9 +64,15 @@ frontend_bundle() {
   N=FrontendBundle
   static_get '/app.js'
   [ "$STATUS" = 200 ] || { fail "$N" HttpStatus 200 "$STATUS"; return; }
-  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/admin/versions/' '/admin/uploads/inspect' '/home?' 'homeCarousel' 'Popular' 'Top Downloads' 'New Releases' 'artifactDropZone' 'uploadDropOverlay' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
+  for marker in '/me/password' '/me/email' '/auth/recovery/request' '/auth/2fa/recovery-codes/regenerate' '/contributions/apps/' '/contributions/uploads/' '/home?' 'homeCarousel' 'Popular' 'Top Downloads' 'New Releases' 'Create Application' 'Upload Version' 'Upload & Analyze' 'Release Metadata' 'artifactDropZone' 'uploadDropOverlay' 'Intel 32 Bit (i386 or i686)' 'Intel 64 Bit (x86_64)' 'showToast' 'recovery_code' 'app-icon-image' 'os_series=1' 'artifactPatchRequirementNote' 'Supported systems:'; do
     grep -Fq "$marker" "$BODY" || { fail "$N" MissingIntegration "$marker" 'not found'; return; }
   done
+  if grep -Fq 'arch_i386' "$BODY" || grep -Fq 'arch_x86_64' "$BODY" || grep -Fq 'supports_32bit' "$BODY" || grep -Fq 'supports_64bit' "$BODY"; then
+    fail "$N" ArchitectureModel 'single architecture-code model without duplicate bitness flags' 'legacy architecture/bitness field found'; return
+  fi
+  if grep -Fq 'Upload Application</h1>' "$BODY"; then
+    fail "$N" ContributionWizard 'separate Create Application and two-step Upload Version workflow' 'legacy one-screen upload form found'; return
+  fi
   if grep -Fq 'New and Noteworthy' "$BODY" || grep -Fq 'panel("Graphics & Design"' "$BODY"; then
     fail "$N" LegacyHomeSections 'Popular, Top Downloads and New Releases only' 'legacy home section found'; return
   fi
@@ -202,21 +208,22 @@ admin_upload() {
   fi
 
   SUFFIX="$(date +%s)-$$"
-  request POST '/api/v1/admin/apps' "$ADMIN_COOKIE" "$WEB_URL" "{\"slug\":\"web-upload-$SUFFIX\",\"name\":\"Web Upload Test\",\"bundle_id\":\"org.legacystore.webtest.$SUFFIX\",\"developer_name\":\"LegacyStore\",\"summary\":\"Web proxy integration test\",\"description\":\"Temporary test record.\",\"category_slug\":\"utilities\"}"
+  request POST '/api/v1/admin/apps' "$ADMIN_COOKIE" "$WEB_URL" "{\"slug\":\"web-upload-$SUFFIX\",\"name\":\"Web Upload Test\",\"bundle_id\":\"org.legacystore.webtest.$SUFFIX\",\"developer_name\":\"LegacyStore\",\"summary\":\"Web proxy integration test\",\"description\":\"Temporary test record.\",\"website_url\":\"https://example.invalid/\",\"source_url\":\"https://github.com/IlyaBOT/LegacyStore\",\"category_slug\":\"utilities\"}"
   APP_ID=$(value '.app.id // empty')
   [ "$STATUS" = 200 ] && [ -n "$APP_ID" ] || { fail "$N" CreateApp '200 app id' "$STATUS $(cat "$BODY")"; return; }
 
-  request POST "/api/v1/admin/apps/$APP_ID/versions" "$ADMIN_COOKIE" "$WEB_URL" '{"version":"1.0-web-test","release_date":"2026-09-18","changelog":"Web integration test","is_recommended":false}'
-  VERSION_ID=$(value '.version.id // empty')
-  [ "$STATUS" = 201 ] && [ -n "$VERSION_ID" ] || { fail "$N" CreateVersion '201 version id' "$STATUS $(cat "$BODY")"; return; }
-
   FILE="$TMP_DIR/Web-Integration-Test.dmg"
-  printf 'LegacyStore web proxy upload integration test\n' > "$FILE"
+  printf 'LegacyStore web proxy staged upload integration test\n' > "$FILE"
   STATUS=$(curl -k -sS -o "$BODY" -D "$HEADERS" -w '%{http_code}' -b "$ADMIN_COOKIE" -c "$ADMIN_COOKIE" -H "Origin: $WEB_URL" \
-    -F "file=@$FILE" -F 'min_os=10.4' -F 'max_tested_os=10.15' -F 'arch_i386=true' -F 'arch_x86_64=true' -F 'supports_32bit=true' -F 'supports_64bit=true' \
-    "$WEB_URL/api/v1/admin/versions/$VERSION_ID/upload")
-  if [ "$STATUS" != 200 ] || ! json '.artifact.id and .artifact.moderation_status == "pending" and .upload.status == "quarantined" and (.upload.sha256 | length == 64)'; then
-    fail "$N" MultipartUpload 'quarantined artifact with SHA-256' "$STATUS $(cat "$BODY")"; return
+    -F "file=@$FILE" "$WEB_URL/api/v1/contributions/apps/$APP_ID/stage")
+  STAGE_UID=$(value '.stage.uid // empty')
+  if [ "$STATUS" != 201 ] || [ -z "$STAGE_UID" ] || ! json '.stage.status == "staged" and (.stage.sha256 | length == 64)'; then
+    fail "$N" StageUpload '201 staged upload with SHA-256' "$STATUS $(cat "$BODY")"; return
+  fi
+
+  request POST "/api/v1/contributions/uploads/$STAGE_UID/commit" "$ADMIN_COOKIE" "$WEB_URL" '{"version":"1.0-web-test","release_date":"2026-09-18","changelog":"Web integration test","is_recommended":false,"min_os":"10.4","max_supported_os":"","max_tested_os":"10.15","hard_block_above_max":false,"architectures":["i386","x86_64"],"requires_rosetta":false,"requires_java":false,"install_notes":""}'
+  if [ "$STATUS" != 201 ] || ! json '.release.version_id and .release.artifact.id and (.release.artifact.architectures | index("i386")) and (.release.artifact.architectures | index("x86_64"))'; then
+    fail "$N" CommitRelease '201 release artifact with unified architectures' "$STATUS $(cat "$BODY")"; return
   fi
   ok "$N"
 }

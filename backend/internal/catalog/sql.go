@@ -3,6 +3,8 @@ package catalog
 import (
 	"database/sql"
 
+	"github.com/lib/pq"
+
 	"legacystore/backend/internal/compatibility"
 )
 
@@ -28,6 +30,7 @@ type appDetailRow struct {
 	DeveloperName string
 	Description   string
 	WebsiteURL    string
+	SourceURL     string
 	LicenseType   string
 }
 
@@ -51,10 +54,7 @@ type artifactRow struct {
 	MaxSupportedOS     string
 	MaxTestedOS        string
 	HardBlockAboveMax  bool
-	ArchI386           bool
-	ArchX8664          bool
-	Supports32Bit      bool
-	Supports64Bit      bool
+	Architectures      []string
 	RequiresRosetta    bool
 	RequiresJava       bool
 	InstallNotes       string
@@ -86,10 +86,7 @@ func artifactQuery() string {
 			COALESCE(ar.max_supported_os, ''),
 			COALESCE(ar.max_tested_os, ''),
 			ar.hard_block_above_max,
-			ar.arch_i386,
-			ar.arch_x86_64,
-			ar.supports_32bit,
-			ar.supports_64bit,
+			ar.architectures,
 			ar.requires_rosetta,
 			ar.requires_java,
 			COALESCE(ar.install_notes, '')
@@ -120,10 +117,7 @@ func scanArtifact(row scanner) (artifactRow, error) {
 		&artifact.MaxSupportedOS,
 		&artifact.MaxTestedOS,
 		&artifact.HardBlockAboveMax,
-		&artifact.ArchI386,
-		&artifact.ArchX8664,
-		&artifact.Supports32Bit,
-		&artifact.Supports64Bit,
+		pq.Array(&artifact.Architectures),
 		&artifact.RequiresRosetta,
 		&artifact.RequiresJava,
 		&artifact.InstallNotes,
@@ -137,10 +131,7 @@ func (a artifactRow) compatibilityArtifact() compatibility.Artifact {
 		MaxSupportedOS:    a.MaxSupportedOS,
 		MaxTestedOS:       a.MaxTestedOS,
 		HardBlockAboveMax: a.HardBlockAboveMax,
-		ArchI386:          a.ArchI386,
-		ArchX8664:         a.ArchX8664,
-		Supports32Bit:     a.Supports32Bit,
-		Supports64Bit:     a.Supports64Bit,
+		Architectures:     a.Architectures,
 		RequiresRosetta:   a.RequiresRosetta,
 		RequiresJava:      a.RequiresJava,
 	}

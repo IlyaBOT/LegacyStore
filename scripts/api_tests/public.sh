@@ -180,7 +180,7 @@ test_unique_app_views() {
 test_compatibility() {
   NAME='Compatibility'
   api_request GET '/api/v1/apps/legacy-32bit-test?os=10.15&arch=x86_64' 0
-  if ! status_is 200 || ! jq_ok '.compatibility.status == "blocked" and (.compatibility.reasons | any(.code == "bitness_mismatch" or .code == "requires_32bit"))'; then
+  if ! status_is 200 || ! jq_ok '.compatibility.status == "blocked" and (.compatibility.reasons | any(.code == "arch_mismatch"))'; then
     err "$NAME" Catalina32Bit 'blocked 32-bit app on macOS 10.15' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
     return
   fi

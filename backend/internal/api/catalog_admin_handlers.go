@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"legacystore/backend/internal/account"
+	"legacystore/backend/internal/architecture"
 	"legacystore/backend/internal/compatibility"
 )
 
@@ -17,27 +18,24 @@ type adminVersionPayload struct {
 }
 
 type adminArtifactPayload struct {
-	FileName           string `json:"file_name"`
-	PackageType        string `json:"package_type"`
-	SourceType         string `json:"source_type"`
-	StoragePath        string `json:"storage_path"`
-	PrimaryDownloadURL string `json:"primary_download_url"`
-	TorrentURL         string `json:"torrent_url"`
-	MagnetURL          string `json:"magnet_url"`
-	SizeBytes          int64  `json:"size_bytes"`
-	SHA256             string `json:"sha256"`
-	MinOS              string `json:"min_os"`
-	MaxSupportedOS     string `json:"max_supported_os"`
-	MaxTestedOS        string `json:"max_tested_os"`
-	HardBlockAboveMax  bool   `json:"hard_block_above_max"`
-	ArchI386           bool   `json:"arch_i386"`
-	ArchX8664          bool   `json:"arch_x86_64"`
-	Supports32Bit      bool   `json:"supports_32bit"`
-	Supports64Bit      bool   `json:"supports_64bit"`
-	RequiresRosetta    bool   `json:"requires_rosetta"`
-	RequiresJava       bool   `json:"requires_java"`
-	InstallNotes       string `json:"install_notes"`
-	ModerationStatus   string `json:"moderation_status"`
+	FileName           string   `json:"file_name"`
+	PackageType        string   `json:"package_type"`
+	SourceType         string   `json:"source_type"`
+	StoragePath        string   `json:"storage_path"`
+	PrimaryDownloadURL string   `json:"primary_download_url"`
+	TorrentURL         string   `json:"torrent_url"`
+	MagnetURL          string   `json:"magnet_url"`
+	SizeBytes          int64    `json:"size_bytes"`
+	SHA256             string   `json:"sha256"`
+	MinOS              string   `json:"min_os"`
+	MaxSupportedOS     string   `json:"max_supported_os"`
+	MaxTestedOS        string   `json:"max_tested_os"`
+	HardBlockAboveMax  bool     `json:"hard_block_above_max"`
+	Architectures      []string `json:"architectures"`
+	RequiresRosetta    bool     `json:"requires_rosetta"`
+	RequiresJava       bool     `json:"requires_java"`
+	InstallNotes       string   `json:"install_notes"`
+	ModerationStatus   string   `json:"moderation_status"`
 }
 
 type adminMirrorPayload struct {
@@ -66,7 +64,7 @@ type adminScreenshotPayload struct {
 }
 
 func (r *Router) adminVersions(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
 		return
 	}
 	appID, ok := pathID(w, req, "id")
@@ -82,7 +80,7 @@ func (r *Router) adminVersions(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateVersion(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
@@ -148,7 +146,7 @@ func (r *Router) adminDeleteVersion(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminArtifacts(w http.ResponseWriter, req *http.Request) {
-	if _, ok := r.requireAdmin(w, req, "trusted", "moder", "admin"); !ok {
+	if _, ok := r.requireAdmin(w, req, "uploader", "trusted", "moder", "admin"); !ok {
 		return
 	}
 	versionID, ok := pathID(w, req, "id")
@@ -164,7 +162,7 @@ func (r *Router) adminArtifacts(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateArtifact(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
@@ -321,7 +319,7 @@ func (r *Router) adminDeleteMirror(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) adminCreateIcon(w http.ResponseWriter, req *http.Request) {
-	actor, ok := r.requireAdmin(w, req, "trusted", "moder", "admin")
+	actor, ok := r.requireAdmin(w, req, "moder", "admin")
 	if !ok {
 		return
 	}
@@ -443,8 +441,7 @@ func artifactFromPayload(payload adminArtifactPayload) account.AdminArtifact {
 		TorrentURL: payload.TorrentURL, MagnetURL: payload.MagnetURL, SizeBytes: payload.SizeBytes,
 		SHA256: strings.ToLower(strings.TrimSpace(payload.SHA256)), MinOS: payload.MinOS,
 		MaxSupportedOS: payload.MaxSupportedOS, MaxTestedOS: payload.MaxTestedOS,
-		HardBlockAboveMax: payload.HardBlockAboveMax, ArchI386: payload.ArchI386, ArchX8664: payload.ArchX8664,
-		Supports32Bit: payload.Supports32Bit, Supports64Bit: payload.Supports64Bit,
+		HardBlockAboveMax: payload.HardBlockAboveMax, Architectures: payload.Architectures,
 		RequiresRosetta: payload.RequiresRosetta, RequiresJava: payload.RequiresJava,
 		InstallNotes: payload.InstallNotes, ModerationStatus: payload.ModerationStatus,
 	}
@@ -472,11 +469,13 @@ func validateArtifactPayload(payload adminArtifactPayload, create bool) string {
 			return "invalid_sha256"
 		}
 	}
-	if create && !payload.ArchI386 && !payload.ArchX8664 {
-		return "architecture_required"
+	if len(payload.Architectures) > 0 {
+		if _, err := architecture.Normalize(payload.Architectures); err != nil {
+			return "invalid_architecture"
+		}
 	}
-	if create && !payload.Supports32Bit && !payload.Supports64Bit {
-		return "bitness_required"
+	if create && len(payload.Architectures) == 0 {
+		return "architecture_required"
 	}
 	if !validVersionRange(payload.MinOS, payload.MaxSupportedOS) || !validVersionRange(payload.MinOS, payload.MaxTestedOS) {
 		return "invalid_os_range"

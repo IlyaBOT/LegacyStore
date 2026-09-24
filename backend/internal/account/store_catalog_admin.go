@@ -6,6 +6,10 @@ import (
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/lib/pq"
+
+	"legacystore/backend/internal/architecture"
 )
 
 func (s *Store) ListAdminVersions(ctx context.Context, appID int64) ([]AdminVersion, error) {
@@ -186,6 +190,12 @@ func (s *Store) CreateAdminArtifact(ctx context.Context, actor User, item AdminA
 	if strings.TrimSpace(item.MinOS) == "" {
 		item.MinOS = "10.4"
 	}
+	architectures, err := architecture.Normalize(item.Architectures)
+	if err != nil {
+		return nil, ErrInvalidCredential
+	}
+	item.Architectures = architectures
+
 	status := "pending"
 	if HasRole(actor, "moder", "admin") {
 		status = "approved"
@@ -202,30 +212,30 @@ func (s *Store) CreateAdminArtifact(ctx context.Context, actor User, item AdminA
 		INSERT INTO artifacts (
 			app_version_id, file_name, package_type, source_type, storage_path, primary_download_url,
 			torrent_url, magnet_url, size_bytes, sha256, min_os, max_supported_os, max_tested_os,
-			hard_block_above_max, arch_i386, arch_x86_64, supports_32bit, supports_64bit,
-			requires_rosetta, requires_java, install_notes, moderation_status
+			hard_block_above_max, architectures, requires_rosetta, requires_java, install_notes, moderation_status
 		)
 		VALUES (
 			$1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''),
-			$9, NULLIF(lower($10), ''), $11, NULLIF($12, ''), NULLIF($13, ''), $14, $15, $16,
-			$17, $18, $19, $20, NULLIF($21, ''), $22
+			$9, NULLIF(lower($10), ''), $11, NULLIF($12, ''), NULLIF($13, ''), $14, $15,
+			$16, $17, NULLIF($18, ''), $19
 		)
 		RETURNING id, app_version_id, file_name, package_type, source_type,
 		          COALESCE(storage_path, ''), COALESCE(primary_download_url, ''), COALESCE(torrent_url, ''),
 		          COALESCE(magnet_url, ''), COALESCE(size_bytes, 0), COALESCE(sha256, ''), min_os,
 		          COALESCE(max_supported_os, ''), COALESCE(max_tested_os, ''), hard_block_above_max,
-		          arch_i386, arch_x86_64, supports_32bit, supports_64bit, requires_rosetta, requires_java,
+		          architectures, requires_rosetta, requires_java,
 		          COALESCE(install_notes, ''), moderation_status, created_at::text, updated_at::text
 	`, item.AppVersionID, strings.TrimSpace(item.FileName), item.PackageType, item.SourceType, strings.TrimSpace(item.StoragePath),
 		strings.TrimSpace(item.PrimaryDownloadURL), strings.TrimSpace(item.TorrentURL), strings.TrimSpace(item.MagnetURL),
 		item.SizeBytes, strings.TrimSpace(item.SHA256), item.MinOS, strings.TrimSpace(item.MaxSupportedOS), strings.TrimSpace(item.MaxTestedOS),
-		item.HardBlockAboveMax, item.ArchI386, item.ArchX8664, item.Supports32Bit, item.Supports64Bit,
-		item.RequiresRosetta, item.RequiresJava, strings.TrimSpace(item.InstallNotes), status).Scan(
+		item.HardBlockAboveMax, pq.Array(item.Architectures), item.RequiresRosetta, item.RequiresJava,
+		strings.TrimSpace(item.InstallNotes), status).Scan(
 		&created.ID, &created.AppVersionID, &created.FileName, &created.PackageType, &created.SourceType,
 		&created.StoragePath, &created.PrimaryDownloadURL, &created.TorrentURL, &created.MagnetURL,
 		&created.SizeBytes, &created.SHA256, &created.MinOS, &created.MaxSupportedOS, &created.MaxTestedOS,
-		&created.HardBlockAboveMax, &created.ArchI386, &created.ArchX8664, &created.Supports32Bit, &created.Supports64Bit,
-		&created.RequiresRosetta, &created.RequiresJava, &created.InstallNotes, &created.ModerationStatus, &created.CreatedAt, &created.UpdatedAt,
+		&created.HardBlockAboveMax, pq.Array(&created.Architectures),
+		&created.RequiresRosetta, &created.RequiresJava, &created.InstallNotes, &created.ModerationStatus,
+		&created.CreatedAt, &created.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -247,6 +257,15 @@ func (s *Store) CreateAdminArtifact(ctx context.Context, actor User, item AdminA
 }
 
 func (s *Store) UpdateAdminArtifact(ctx context.Context, actor User, artifactID int64, item AdminArtifact, ip net.IP, userAgent string) (*AdminArtifact, error) {
+	architectures := item.Architectures
+	if len(architectures) > 0 {
+		normalized, err := architecture.Normalize(architectures)
+		if err != nil {
+			return nil, ErrInvalidCredential
+		}
+		architectures = normalized
+	}
+
 	var updated AdminArtifact
 	err := s.db.QueryRowContext(ctx, `
 		UPDATE artifacts
@@ -263,31 +282,29 @@ func (s *Store) UpdateAdminArtifact(ctx context.Context, actor User, artifactID 
 		    max_supported_os = COALESCE(NULLIF($12, ''), max_supported_os),
 		    max_tested_os = COALESCE(NULLIF($13, ''), max_tested_os),
 		    hard_block_above_max = $14,
-		    arch_i386 = $15,
-		    arch_x86_64 = $16,
-		    supports_32bit = $17,
-		    supports_64bit = $18,
-		    requires_rosetta = $19,
-		    requires_java = $20,
-		    install_notes = COALESCE(NULLIF($21, ''), install_notes),
-		    moderation_status = COALESCE(NULLIF($22, ''), moderation_status)
+		    architectures = CASE WHEN cardinality($15::text[]) > 0 THEN $15::text[] ELSE architectures END,
+		    requires_rosetta = $16,
+		    requires_java = $17,
+		    install_notes = COALESCE(NULLIF($18, ''), install_notes),
+		    moderation_status = COALESCE(NULLIF($19, ''), moderation_status)
 		WHERE id = $1
 		RETURNING id, app_version_id, file_name, package_type, source_type,
 		          COALESCE(storage_path, ''), COALESCE(primary_download_url, ''), COALESCE(torrent_url, ''),
 		          COALESCE(magnet_url, ''), COALESCE(size_bytes, 0), COALESCE(sha256, ''), min_os,
 		          COALESCE(max_supported_os, ''), COALESCE(max_tested_os, ''), hard_block_above_max,
-		          arch_i386, arch_x86_64, supports_32bit, supports_64bit, requires_rosetta, requires_java,
+		          architectures, requires_rosetta, requires_java,
 		          COALESCE(install_notes, ''), moderation_status, created_at::text, updated_at::text
 	`, artifactID, strings.TrimSpace(item.FileName), item.PackageType, item.SourceType, strings.TrimSpace(item.StoragePath),
 		strings.TrimSpace(item.PrimaryDownloadURL), strings.TrimSpace(item.TorrentURL), strings.TrimSpace(item.MagnetURL),
 		item.SizeBytes, strings.TrimSpace(item.SHA256), strings.TrimSpace(item.MinOS), strings.TrimSpace(item.MaxSupportedOS),
-		strings.TrimSpace(item.MaxTestedOS), item.HardBlockAboveMax, item.ArchI386, item.ArchX8664,
-		item.Supports32Bit, item.Supports64Bit, item.RequiresRosetta, item.RequiresJava, strings.TrimSpace(item.InstallNotes), strings.TrimSpace(item.ModerationStatus)).Scan(
+		strings.TrimSpace(item.MaxTestedOS), item.HardBlockAboveMax, pq.Array(architectures),
+		item.RequiresRosetta, item.RequiresJava, strings.TrimSpace(item.InstallNotes), strings.TrimSpace(item.ModerationStatus)).Scan(
 		&updated.ID, &updated.AppVersionID, &updated.FileName, &updated.PackageType, &updated.SourceType,
 		&updated.StoragePath, &updated.PrimaryDownloadURL, &updated.TorrentURL, &updated.MagnetURL,
 		&updated.SizeBytes, &updated.SHA256, &updated.MinOS, &updated.MaxSupportedOS, &updated.MaxTestedOS,
-		&updated.HardBlockAboveMax, &updated.ArchI386, &updated.ArchX8664, &updated.Supports32Bit, &updated.Supports64Bit,
-		&updated.RequiresRosetta, &updated.RequiresJava, &updated.InstallNotes, &updated.ModerationStatus, &updated.CreatedAt, &updated.UpdatedAt,
+		&updated.HardBlockAboveMax, pq.Array(&updated.Architectures),
+		&updated.RequiresRosetta, &updated.RequiresJava, &updated.InstallNotes, &updated.ModerationStatus,
+		&updated.CreatedAt, &updated.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -540,7 +557,7 @@ func adminArtifactSelect() string {
 		       COALESCE(storage_path, ''), COALESCE(primary_download_url, ''), COALESCE(torrent_url, ''),
 		       COALESCE(magnet_url, ''), COALESCE(size_bytes, 0), COALESCE(sha256, ''), min_os,
 		       COALESCE(max_supported_os, ''), COALESCE(max_tested_os, ''), hard_block_above_max,
-		       arch_i386, arch_x86_64, supports_32bit, supports_64bit, requires_rosetta, requires_java,
+		       architectures, requires_rosetta, requires_java,
 		       COALESCE(install_notes, ''), moderation_status, created_at::text, updated_at::text
 		FROM artifacts
 	`
@@ -556,7 +573,7 @@ func scanAdminArtifact(row rowScanner) (AdminArtifact, error) {
 		&item.ID, &item.AppVersionID, &item.FileName, &item.PackageType, &item.SourceType,
 		&item.StoragePath, &item.PrimaryDownloadURL, &item.TorrentURL, &item.MagnetURL,
 		&item.SizeBytes, &item.SHA256, &item.MinOS, &item.MaxSupportedOS, &item.MaxTestedOS,
-		&item.HardBlockAboveMax, &item.ArchI386, &item.ArchX8664, &item.Supports32Bit, &item.Supports64Bit,
+		&item.HardBlockAboveMax, pq.Array(&item.Architectures),
 		&item.RequiresRosetta, &item.RequiresJava, &item.InstallNotes, &item.ModerationStatus, &item.CreatedAt, &item.UpdatedAt,
 	)
 	return item, err

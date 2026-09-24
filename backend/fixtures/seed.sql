@@ -159,27 +159,24 @@ CREATE TEMP TABLE seed_artifacts (
     max_supported_os text,
     max_tested_os text,
     hard_block_above_max boolean NOT NULL,
-    arch_i386 boolean NOT NULL,
-    arch_x86_64 boolean NOT NULL,
-    supports_32bit boolean NOT NULL,
-    supports_64bit boolean NOT NULL,
+    architectures text[] NOT NULL,
     requires_java boolean NOT NULL,
     install_notes text
 ) ON COMMIT DROP;
 
 INSERT INTO seed_artifacts VALUES
-    ('pixelmator', '3.6', 'Pixelmator_3.6.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/pixelmator/Pixelmator_3.6.dmg', 205940326, repeat('a', 64), '10.8', '10.13', '10.13', false, false, true, false, true, false, 'Catalog metadata only; no real file is mirrored.'),
-    ('pixelmator', '2.2', 'Pixelmator_2.2.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/pixelmator/Pixelmator_2.2.dmg', 172300000, repeat('b', 64), '10.7', '10.9', '10.9', false, false, true, true, true, false, 'Older release metadata.'),
-    ('vlc', '2.2.8', 'VLC_2.2.8.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/vlc/VLC_2.2.8.dmg', 42100120, repeat('c', 64), '10.6', '10.14', '10.14', false, true, true, true, true, false, 'Catalog metadata only.'),
-    ('cyberduck', '4.7', 'Cyberduck_4.7.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/cyberduck/Cyberduck_4.7.zip', 88510000, repeat('d', 64), '10.7', '10.14', '10.14', false, false, true, false, true, false, 'Catalog metadata only.'),
-    ('firefox-legacy', '45.9', 'Firefox_45.9.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/firefox/Firefox_45.9.dmg', 91500000, repeat('e', 64), '10.6', '10.11', '10.11', false, true, true, true, true, false, 'Catalog metadata only.'),
-    ('adium', '1.5.10', 'Adium_1.5.10.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/adium/Adium_1.5.10.dmg', 25200000, repeat('f', 64), '10.6', '10.10', '10.10', false, true, true, true, true, false, 'Catalog metadata only.'),
-    ('transmission', '2.84', 'Transmission_2.84.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/transmission/Transmission_2.84.dmg', 7200000, repeat('1', 64), '10.6', '10.14', '10.14', false, true, true, true, true, false, 'Catalog metadata only.'),
-    ('libreoffice', '5.4.7', 'LibreOffice_5.4.7.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/libreoffice/LibreOffice_5.4.7.dmg', 221000000, repeat('2', 64), '10.8', '10.13', '10.13', false, false, true, false, true, false, 'Catalog metadata only.'),
-    ('handbrake', '0.10.5', 'HandBrake_0.10.5.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/handbrake/HandBrake_0.10.5.dmg', 18600000, repeat('3', 64), '10.6', '10.12', '10.12', false, false, true, false, true, false, 'Catalog metadata only.'),
-    ('gimp', '2.8.22', 'GIMP_2.8.22.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/gimp/GIMP_2.8.22.dmg', 97000000, repeat('4', 64), '10.7', '10.12', '10.12', false, false, true, false, true, false, 'Catalog metadata only.'),
-    ('appcleaner', '3.4', 'AppCleaner_3.4.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/appcleaner/AppCleaner_3.4.zip', 4300000, repeat('5', 64), '10.6', '10.14', '10.14', false, true, true, true, true, false, 'Catalog metadata only.'),
-    ('legacy-32bit-test', '1.0', 'Legacy32_1.0.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/legacy32/Legacy32_1.0.zip', 1200000, repeat('6', 64), '10.6', '10.14', '10.14', true, true, true, true, false, false, 'Intentionally 32-bit-only release.');
+    ('pixelmator', '3.6', 'Pixelmator_3.6.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/pixelmator/Pixelmator_3.6.dmg', 205940326, repeat('a', 64), '10.8', '10.13', '10.13', false, ARRAY['x86_64'], false, 'Catalog metadata only; no real file is mirrored.'),
+    ('pixelmator', '2.2', 'Pixelmator_2.2.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/pixelmator/Pixelmator_2.2.dmg', 172300000, repeat('b', 64), '10.7', '10.9', '10.9', false, ARRAY['x86_64'], false, 'Older release metadata.'),
+    ('vlc', '2.2.8', 'VLC_2.2.8.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/vlc/VLC_2.2.8.dmg', 42100120, repeat('c', 64), '10.6', '10.14', '10.14', false, ARRAY['i386','x86_64'], false, 'Catalog metadata only.'),
+    ('cyberduck', '4.7', 'Cyberduck_4.7.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/cyberduck/Cyberduck_4.7.zip', 88510000, repeat('d', 64), '10.7', '10.14', '10.14', false, ARRAY['x86_64'], false, 'Catalog metadata only.'),
+    ('firefox-legacy', '45.9', 'Firefox_45.9.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/firefox/Firefox_45.9.dmg', 91500000, repeat('e', 64), '10.6', '10.11', '10.11', false, ARRAY['i386','x86_64'], false, 'Catalog metadata only.'),
+    ('adium', '1.5.10', 'Adium_1.5.10.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/adium/Adium_1.5.10.dmg', 25200000, repeat('f', 64), '10.6', '10.10', '10.10', false, ARRAY['i386','x86_64'], false, 'Catalog metadata only.'),
+    ('transmission', '2.84', 'Transmission_2.84.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/transmission/Transmission_2.84.dmg', 7200000, repeat('1', 64), '10.6', '10.14', '10.14', false, ARRAY['i386','x86_64'], false, 'Catalog metadata only.'),
+    ('libreoffice', '5.4.7', 'LibreOffice_5.4.7.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/libreoffice/LibreOffice_5.4.7.dmg', 221000000, repeat('2', 64), '10.8', '10.13', '10.13', false, ARRAY['x86_64'], false, 'Catalog metadata only.'),
+    ('handbrake', '0.10.5', 'HandBrake_0.10.5.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/handbrake/HandBrake_0.10.5.dmg', 18600000, repeat('3', 64), '10.6', '10.12', '10.12', false, ARRAY['x86_64'], false, 'Catalog metadata only.'),
+    ('gimp', '2.8.22', 'GIMP_2.8.22.dmg', 'dmg', 'external_direct', 'https://downloads.example.invalid/gimp/GIMP_2.8.22.dmg', 97000000, repeat('4', 64), '10.7', '10.12', '10.12', false, ARRAY['x86_64'], false, 'Catalog metadata only.'),
+    ('appcleaner', '3.4', 'AppCleaner_3.4.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/appcleaner/AppCleaner_3.4.zip', 4300000, repeat('5', 64), '10.6', '10.14', '10.14', false, ARRAY['i386','x86_64'], false, 'Catalog metadata only.'),
+    ('legacy-32bit-test', '1.0', 'Legacy32_1.0.zip', 'zip', 'external_direct', 'https://downloads.example.invalid/legacy32/Legacy32_1.0.zip', 1200000, repeat('6', 64), '10.6', '10.14', '10.14', true, ARRAY['i386'], false, 'Intentionally 32-bit Intel-only release.');
 
 INSERT INTO artifacts (
     app_version_id,
@@ -193,10 +190,7 @@ INSERT INTO artifacts (
     max_supported_os,
     max_tested_os,
     hard_block_above_max,
-    arch_i386,
-    arch_x86_64,
-    supports_32bit,
-    supports_64bit,
+    architectures,
     requires_java,
     install_notes,
     moderation_status
@@ -213,10 +207,7 @@ SELECT
     sa.max_supported_os,
     sa.max_tested_os,
     sa.hard_block_above_max,
-    sa.arch_i386,
-    sa.arch_x86_64,
-    sa.supports_32bit,
-    sa.supports_64bit,
+    sa.architectures,
     sa.requires_java,
     sa.install_notes,
     'approved'

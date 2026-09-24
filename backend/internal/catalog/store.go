@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"legacystore/backend/internal/architecture"
 	"legacystore/backend/internal/compatibility"
 )
 
@@ -88,10 +89,18 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 				LIMIT 1
 			), '') AS icon,
 			COALESCE((
-				SELECT image_url
-				FROM screenshots
-				WHERE app_id = a.id
-				ORDER BY sort_order, id
+				SELECT s.image_url
+				FROM screenshots s
+				WHERE s.app_id = a.id
+				  AND (
+				      s.app_version_id IS NULL OR
+				      EXISTS (
+				          SELECT 1 FROM artifacts published
+				          WHERE published.app_version_id = s.app_version_id
+				            AND published.moderation_status = 'approved'
+				      )
+				  )
+				ORDER BY s.sort_order, s.id
 				LIMIT 1
 			), '') AS hero_image,
 			COALESCE(stats.average_rating, 0) AS rating,
@@ -134,6 +143,13 @@ func (s *Store) Apps(ctx context.Context, filters Filters) ([]AppSummary, error)
 		if filters.CompatibleOnly && result.Status == "blocked" {
 			continue
 		}
+		if selected != nil {
+			if icon, iconErr := s.iconForVersion(ctx, row.ID, selected.VersionID, row.Icon); iconErr == nil {
+				row.Icon = icon
+			} else {
+				return nil, iconErr
+			}
+		}
 
 		summary := AppSummary{
 			Slug:            row.Slug,
@@ -173,6 +189,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 			COALESCE(a.description, ''),
 			c.name,
 			COALESCE(a.website_url, ''),
+			COALESCE(a.source_url, ''),
 			COALESCE(a.license_type, ''),
 			COALESCE((
 				SELECT image_url
@@ -201,6 +218,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		&row.Description,
 		&row.Category,
 		&row.WebsiteURL,
+		&row.SourceURL,
 		&row.LicenseType,
 		&row.Icon,
 		&row.Rating,
@@ -221,7 +239,16 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 	}
 	selected, result := chooseArtifact(target, artifacts)
 
-	screenshots, err := s.screenshots(ctx, row.ID)
+	selectedVersionID := int64(0)
+	if selected != nil {
+		selectedVersionID = selected.VersionID
+		if icon, iconErr := s.iconForVersion(ctx, row.ID, selectedVersionID, row.Icon); iconErr == nil {
+			row.Icon = icon
+		} else {
+			return nil, iconErr
+		}
+	}
+	screenshots, err := s.screenshots(ctx, row.ID, selectedVersionID)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +263,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 	}
 
 	detail := &AppDetail{
+		ID:            row.ID,
 		Slug:          row.Slug,
 		Name:          row.Name,
 		BundleID:      row.BundleID,
@@ -244,6 +272,7 @@ func (s *Store) AppBySlug(ctx context.Context, slug string, target compatibility
 		Description:   row.Description,
 		Category:      row.Category,
 		WebsiteURL:    row.WebsiteURL,
+		SourceURL:     row.SourceURL,
 		LicenseType:   row.LicenseType,
 		Icon:          row.Icon,
 		Screenshots:   screenshots,
@@ -410,14 +439,55 @@ func (s *Store) artifactByID(ctx context.Context, artifactID int64) (*artifactRo
 	return &artifact, nil
 }
 
-func (s *Store) screenshots(ctx context.Context, appID int64) ([]Screenshot, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT image_url, COALESCE(caption, ''), sort_order
-		FROM screenshots
+func (s *Store) iconForVersion(ctx context.Context, appID, versionID int64, fallback string) (string, error) {
+	if versionID <= 0 {
+		return fallback, nil
+	}
+	var icon string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT image_url
+		FROM icons
 		WHERE app_id = $1
-		ORDER BY sort_order, id
+		  AND (app_version_id = $2 OR app_version_id IS NULL)
+		  AND (
+		      app_version_id IS NULL OR
+		      EXISTS (
+		          SELECT 1 FROM artifacts published
+		          WHERE published.app_version_id = icons.app_version_id
+		            AND published.moderation_status = 'approved'
+		      )
+		  )
+		ORDER BY CASE WHEN app_version_id = $2 THEN 0 ELSE 1 END, id DESC
+		LIMIT 1
+	`, appID, versionID).Scan(&icon)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fallback, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return icon, nil
+}
+
+func (s *Store) screenshots(ctx context.Context, appID, versionID int64) ([]Screenshot, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.image_url, COALESCE(s.caption, ''), s.sort_order
+		FROM screenshots s
+		WHERE s.app_id = $1
+		  AND (
+		      s.app_version_id IS NULL OR
+		      (
+		          s.app_version_id = NULLIF($2, 0)
+		          AND EXISTS (
+		              SELECT 1 FROM artifacts published
+		              WHERE published.app_version_id = s.app_version_id
+		                AND published.moderation_status = 'approved'
+		          )
+		      )
+		  )
+		ORDER BY CASE WHEN s.app_version_id = NULLIF($2, 0) THEN 0 ELSE 1 END, s.sort_order, s.id
 		LIMIT 8
-	`, appID)
+	`, appID, versionID)
 	if err != nil {
 		return nil, err
 	}
@@ -525,25 +595,24 @@ func versionsFromArtifacts(target compatibility.Target, artifacts []artifactRow)
 
 func artifactResponse(row artifactRow) ArtifactResponse {
 	resp := ArtifactResponse{
-		ID:                row.ID,
-		Version:           row.Version,
-		FileName:          row.FileName,
-		PackageType:       row.PackageType,
-		SourceType:        row.SourceType,
-		DownloadURL:       row.PrimaryDownloadURL,
-		TorrentURL:        row.TorrentURL,
-		MagnetURL:         row.MagnetURL,
-		SizeBytes:         row.SizeBytes,
-		SHA256:            row.SHA256,
-		MinOS:             row.MinOS,
-		MaxSupportedOS:    row.MaxSupportedOS,
-		MaxTestedOS:       row.MaxTestedOS,
-		HardBlockAboveMax: row.HardBlockAboveMax,
-		Archs:             artifactArchs(row),
-		Supports32Bit:     row.Supports32Bit,
-		Supports64Bit:     row.Supports64Bit,
-		RequiresJava:      row.RequiresJava,
-		InstallNotes:      row.InstallNotes,
+		ID:                 row.ID,
+		Version:            row.Version,
+		FileName:           row.FileName,
+		PackageType:        row.PackageType,
+		SourceType:         row.SourceType,
+		DownloadURL:        row.PrimaryDownloadURL,
+		TorrentURL:         row.TorrentURL,
+		MagnetURL:          row.MagnetURL,
+		SizeBytes:          row.SizeBytes,
+		SHA256:             row.SHA256,
+		MinOS:              row.MinOS,
+		MaxSupportedOS:     row.MaxSupportedOS,
+		MaxTestedOS:        row.MaxTestedOS,
+		HardBlockAboveMax:  row.HardBlockAboveMax,
+		Archs:              append([]string(nil), row.Architectures...),
+		ArchitectureLabels: architecture.HumanLabels(row.Architectures),
+		RequiresJava:       row.RequiresJava,
+		InstallNotes:       row.InstallNotes,
 	}
 	if row.SourceType == "external_page" {
 		resp.ExternalPageURL = row.PrimaryDownloadURL
@@ -552,28 +621,11 @@ func artifactResponse(row artifactRow) ArtifactResponse {
 	return resp
 }
 
-func artifactArchs(row artifactRow) []string {
-	var archs []string
-	if row.ArchI386 {
-		archs = append(archs, "i386")
-	}
-	if row.ArchX8664 {
-		archs = append(archs, "x86_64")
-	}
-	return archs
-}
-
 func archBadges(row *artifactRow) []string {
 	if row == nil {
 		return nil
 	}
-	if row.ArchI386 && row.ArchX8664 {
-		return []string{"Intel", "i386", "x86_64"}
-	}
-	if row.ArchI386 {
-		return []string{"Intel", "i386"}
-	}
-	return []string{"Intel", "x86_64"}
+	return architecture.HumanLabels(row.Architectures)
 }
 
 func normalizeFilters(filters Filters) Filters {
