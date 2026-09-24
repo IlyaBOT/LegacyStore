@@ -104,6 +104,49 @@ test_admin_moderation() {
     return
   fi
 
+  register_user uploader2
+  if ! status_is 200 || [ -z "$REGISTER_TOKEN" ]; then
+    err "$NAME" RegisterSecondUploader 200 "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+  SECOND_UPLOADER_TOKEN=$REGISTER_TOKEN
+  SECOND_UPLOADER_ID=$(body_value '.user.id')
+
+  api_request POST "/api/v1/admin/users/$SECOND_UPLOADER_ID/roles" 1 "$ADMIN_TOKEN" '{"role":"uploader"}'
+  if ! status_is 200 || ! jq_ok '.status == "ok"'; then
+    err "$NAME" GrantSecondUploader '200 status=ok' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request GET "/api/v1/admin/apps/$APP_ID" 1 "$SECOND_UPLOADER_TOKEN"
+  if ! status_is 200 || ! jq -e --arg id "$APP_ID" '.app.id == ($id|tonumber)' "$BODY_FILE" >/dev/null 2>&1; then
+    err "$NAME" ExistingApplicationVisible 'any uploader can open an approved application for contribution' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  SECOND_UPLOAD_FILE="$TMP_DIR/LegacyStore-Second-Uploader-Test.zip"
+  printf 'LegacyStore second uploader contribution artifact\n' > "$SECOND_UPLOAD_FILE"
+  HTTP_STATUS=$(curl -sS -o "$BODY_FILE" -D "$HEADERS_FILE" -w '%{http_code}' \
+    -X POST \
+    -H 'X-Forwarded-Proto: https' \
+    -H "Authorization: Bearer $SECOND_UPLOADER_TOKEN" \
+    -H 'User-Agent: LegacyStore-API-Tests/1.0' \
+    -F "file=@$SECOND_UPLOAD_FILE" \
+    "$BASE_URL/api/v1/contributions/apps/$APP_ID/stage")
+  printf '%s' "$HTTP_STATUS" > "$STATUS_FILE"
+  SECOND_STAGE_UID=$(body_value '.stage.uid // empty')
+  if ! status_is 201 || [ -z "$SECOND_STAGE_UID" ]; then
+    err "$NAME" StageExistingApplication 'any uploader can stage a release for an existing approved application' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
+  api_request POST "/api/v1/contributions/uploads/$SECOND_STAGE_UID/commit" 1 "$SECOND_UPLOADER_TOKEN" '{"version":"0.9-second-uploader","is_recommended":false,"min_os":"10.4","max_supported_os":"10.15","max_tested_os":"10.15","hard_block_above_max":false,"architectures":["x86_64"],"requires_rosetta":false,"requires_java":false,"install_notes":""}'
+  SECOND_ARTIFACT_ID=$(body_value '.release.artifact.id // empty')
+  if ! status_is 201 || [ -z "$SECOND_ARTIFACT_ID" ] || ! jq_ok '.release.moderation_status == "pending" and (.release.artifact.architectures == ["x86_64"])'; then
+    err "$NAME" CommitExistingApplication 'second uploader can add a pending version to the existing application' "$(cat "$STATUS_FILE") $(cat "$BODY_FILE")"
+    return
+  fi
+
   UPLOAD_FILE="$TMP_DIR/LegacyStore-API-Test.dmg"
   printf 'LegacyStore staged contribution artifact\n' > "$UPLOAD_FILE"
   HTTP_STATUS=$(curl -sS -o "$BODY_FILE" -D "$HEADERS_FILE" -w '%{http_code}' \
