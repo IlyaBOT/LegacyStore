@@ -230,7 +230,7 @@
 
     var managementRoutes = [];
     if (canUpload(state.currentUser)) {
-      managementRoutes.push(["uploads", "Add Application", "upload"]);
+      managementRoutes.push(["uploads", "Create Application", "upload"]);
     }
     if (canModerate(state.currentUser)) {
       managementRoutes.push(["moderation", "Moderation Queue", "moderation"]);
@@ -417,7 +417,7 @@
     return '<article class="home-carousel-slide is-empty" data-carousel-slide>' + finderMarkHTML() +
       '<div class="home-carousel-content"><span class="carousel-eyebrow">Fresh installation</span>' +
       '<h1>No applications yet</h1><p>The apps haven\'t been uploaded yet. Maybe you\'re a developer and just started this Legacy Store instance, huh? ;-)</p>' +
-      '<button class="blue-button" data-route="uploads" type="button">Upload Application</button></div></article>';
+      '<button class="blue-button" data-route="uploads" type="button">Create Application</button></div></article>';
   }
 
   function appCarouselSlideHTML(slide) {
@@ -1344,11 +1344,9 @@ function renderUploads() {
       '<form id="createApplicationForm" class="upload-bento create-app-form">' +
       '<section class="bento-card upload-app-card"><h2>Application</h2><p class="panel-help">These fields describe the application itself and are shared by every release.</p>' +
       '<div class="compact-field-grid upload-app-fields">' +
-      '<div class="form-row field-large"><label>App Name <span class="required-dot">*</span></label><input name="name" type="text" maxlength="160" placeholder="My cool Macintosh app!" required></div>' +
+      '<div class="form-row field-large"><label>App Name <span class="required-dot">*</span></label><input name="name" type="text" maxlength="160" placeholder="My cool Macintosh app!" required><input name="slug" type="hidden"></div>' +
       '<div class="form-row field-medium"><label>Developer <span class="required-dot">*</span></label><input name="developer_name" type="text" maxlength="160" placeholder="Developer or company" required></div>' +
-      '<div class="form-row field-wide"><label>Bundle ID</label><input name="bundle_id" type="text" maxlength="255" placeholder="com.example.mycoolapp"></div>' +
       '<div class="form-row field-medium"><label>Category <span class="required-dot">*</span></label><select name="category_slug" required>' + uploadCategoryOptions() + '</select></div>' +
-      '<div class="form-row field-medium"><label>Catalog slug <span class="required-dot">*</span></label><input name="slug" type="text" maxlength="80" placeholder="my-cool-macintosh-app" required></div>' +
       '<div class="form-row field-large"><label>Summary <span class="required-dot">*</span></label><input name="summary" type="text" maxlength="240" placeholder="A short one-line description" required></div>' +
       '<div class="form-row field-wide"><label>Homepage</label><input name="website_url" type="url" maxlength="1000" placeholder="https://example.com/"></div>' +
       '<div class="form-row field-wide"><label>Source / GitHub</label><input name="source_url" type="url" maxlength="1000" placeholder="https://github.com/example/project"></div>' +
@@ -1396,7 +1394,7 @@ function renderUploads() {
       jsonRequest("POST", "/admin/apps", {
         slug: data.slug,
         name: data.name,
-        bundle_id: data.bundle_id || "",
+        bundle_id: "",
         developer_name: data.developer_name,
         category_slug: data.category_slug,
         summary: data.summary,
@@ -1406,16 +1404,24 @@ function renderUploads() {
       }).then(function (payload) {
         var app = payload.app || {};
         state.uploadContext.appId = String(app.id || "");
-        if (!icon) { return payload; }
+        return payload;
+      }).then(function (payload) {
+        var app = payload.app || {};
+        if (!icon) { return { payload: payload, mediaError: null }; }
         var formData = new FormData();
         formData.append("file", icon, icon.name || "icon");
         formData.append("app_version_id", "0");
         formData.append("min_os", "10.4");
         formData.append("max_os", "15");
-        return api("/admin/apps/" + encodeURIComponent(app.id) + "/icons/upload", { method: "POST", body: formData }).then(function () { return payload; });
-      }).then(function (payload) {
+        return api("/admin/apps/" + encodeURIComponent(app.id) + "/icons/upload", { method: "POST", body: formData })
+          .then(function () { return { payload: payload, mediaError: null }; })
+          .catch(function (error) { return { payload: payload, mediaError: error }; });
+      }).then(function (result) {
+        var payload = result.payload;
         var status = payload.app && payload.app.moderation_status ? payload.app.moderation_status : "pending";
-        if (status === "pending") {
+        if (result.mediaError) {
+          showToast("Application page created, but the default icon could not be uploaded: " + humanError(result.mediaError), "error");
+        } else if (status === "pending") {
           showToast("Application page created and sent to moderation. You can upload releases now.", "success");
         } else {
           showToast("Application page created.", "success");
@@ -1833,9 +1839,13 @@ function renderUploads() {
         showMessage("releaseMetadataNotice", "Release created. Processing version-specific images...", false);
         return uploadReleaseIcon(app.id, release.version_id, form)
           .then(function () { return uploadReleaseScreenshots(app.id, release.version_id, form); })
-          .then(function () { return release; });
-      }).then(function (release) {
-        if (release.moderation_status === "pending") {
+          .then(function () { return { release: release, mediaError: null }; })
+          .catch(function (error) { return { release: release, mediaError: error }; });
+      }).then(function (result) {
+        var release = result.release || {};
+        if (result.mediaError) {
+          showToast("Release submitted, but version-specific images could not be uploaded: " + humanError(result.mediaError), "error");
+        } else if (release.moderation_status === "pending") {
           showToast("Release submitted. It will become public after moderation.", "success");
         } else {
           showToast("Release published.", "success");
