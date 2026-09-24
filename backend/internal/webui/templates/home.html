@@ -1,0 +1,40 @@
+{{define "content"}}
+{{if .IsSearch}}
+  <div class="page-head"><h1>Поиск</h1><p>{{if .Query}}Результаты для «{{.Query}}»{{else}}Введите запрос в поле поиска.{{end}}</p></div>
+  <div class="app-list">
+    {{range .Apps}}{{template "app-card" .}}{{else}}{{if .Query}}<div class="empty">Ничего не найдено.</div>{{end}}{{end}}
+  </div>
+{{else}}
+  {{if .Home}}
+    {{with index .Home.Slides 0}}
+    <div class="hero">
+      <div class="hero-icon">{{if .App.Icon}}<img src="{{.App.Icon}}" alt="">{{else}}{{initial .App.Name}}{{end}}</div>
+      <div class="hero-copy">
+        <div class="hero-kicker">{{.Metric}}</div>
+        <h1>{{.App.Name}}</h1>
+        <p>{{.App.Summary}}</p>
+        <a class="blue-button" href="/app/{{.App.Slug}}">Подробнее</a>
+      </div>
+      <div class="clear"></div>
+    </div>
+    {{end}}
+
+    <div class="section-title"><h2>Популярное</h2><a href="/search?sort=popular">Показать всё</a></div>
+    <div class="app-list">{{range .Home.Popular}}{{template "app-card" .}}{{else}}<div class="empty">Каталог пока пуст.</div>{{end}}</div>
+
+    <div class="section-title"><h2>Новые релизы</h2></div>
+    <div class="app-list">{{range .Home.NewReleases}}{{template "app-card" .}}{{end}}</div>
+
+    <div class="section-title"><h2>Больше всего загрузок</h2></div>
+    <div class="app-list">{{range .Home.TopDownloads}}{{template "app-card" .}}{{end}}</div>
+  {{end}}
+{{end}}
+{{end}}
+
+{{define "app-card"}}
+<a class="app-card" href="/app/{{.Slug}}">
+  <span class="app-icon">{{if .Icon}}<img src="{{.Icon}}" alt="">{{else}}<b>{{initial .Name}}</b>{{end}}</span>
+  <span class="app-copy"><strong>{{.Name}}</strong><small>{{.Category}}</small><em>{{.Summary}}</em></span>
+  <span class="app-meta">★ {{printf "%.1f" .Rating}} · {{.Downloads}} загрузок</span>
+</a>
+{{end}}

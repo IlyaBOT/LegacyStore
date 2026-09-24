@@ -1,0 +1,14 @@
+{{define "content"}}
+<div class="page-head"><h1>Admin Dashboard</h1><p>Состояние каталога, пользователей и очереди модерации.</p></div>
+<div class="stats">
+  <a class="stat" href="/admin/system?tab=users"><b>{{index .Dashboard "users"}}</b><span>Пользователей</span></a>
+  <a class="stat" href="/admin/system?tab=apps"><b>{{index .Dashboard "apps_approved"}}</b><span>Приложений</span></a>
+  <a class="stat" href="/admin/moderation"><b>{{index .Dashboard "moderation_pending"}}</b><span>На модерации</span></a>
+  <a class="stat" href="/admin/system?tab=reviews"><b>{{index .Dashboard "reviews"}}</b><span>Комментариев</span></a>
+</div>
+<div class="panel">
+  <h2>Быстрые действия</h2>
+  <p><a class="blue-button" href="/admin/moderation">Открыть модерацию</a> {{if hasRole .User "admin"}}<a class="button" href="/admin/system">Управление системой</a>{{end}}</p>
+  <p class="help">Dashboard рендерится на сервере и не зависит от fetch/Promise/SPA-маршрутизации.</p>
+</div>
+{{end}}

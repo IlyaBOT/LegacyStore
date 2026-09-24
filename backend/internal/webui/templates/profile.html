@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="page-head"><h1>Профиль</h1><p>Настройки аккаунта и активные браузерные сессии.</p></div>
+<div class="columns">
+  <div class="column-left">
+    <div class="panel">
+      <h2>Основные данные</h2>
+      <form method="post" action="/account/profile">
+        <label>Email <input type="email" value="{{.User.Email}}" disabled></label>
+        <label>Имя <input type="text" name="nickname" value="{{.User.Nickname}}" maxlength="80"></label>
+        <label>Avatar URL <input type="url" name="avatar_url" value="{{.User.AvatarURL}}"></label>
+        <label>Роли <input type="text" value="{{roles .User.Roles}}" disabled></label>
+        <button class="blue-button" type="submit">Сохранить</button>
+      </form>
+    </div>
+  </div>
+  <div class="column-right">
+    <div class="panel">
+      <h2>Безопасность</h2>
+      <p><b>2FA:</b> {{if .User.TwoFactorEnabled}}включена{{else}}выключена{{end}}</p>
+      <p><b>Email:</b> {{if .User.EmailVerified}}подтверждён{{else}}не подтверждён{{end}}</p>
+      <p><b>Статус:</b> {{.User.Status}}</p>
+      <p class="help">Управление паролем, 2FA и app-specific паролями будет перенесено сюда следующим этапом без зависимости от JavaScript.</p>
+    </div>
+  </div>
+  <div class="clear"></div>
+</div>
+
+<div class="panel">
+  <h2>Активные сессии</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Устройство</th><th>IP</th><th>Последняя активность</th><th></th></tr></thead>
+      <tbody>
+      {{range .Sessions}}
+        <tr>
+          <td>{{if .DeviceName}}{{.DeviceName}}{{else}}Browser{{end}}</td>
+          <td>{{.IPAddress}}</td>
+          <td>{{.LastSeenAt}}</td>
+          <td class="actions"><form method="post" action="/account/profile/sessions/{{.ID}}/revoke" class="confirm-danger"><button type="submit">Закрыть</button></form></td>
+        </tr>
+      {{else}}<tr><td colspan="4">Нет активных сессий.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,26 @@
+{{define "content"}}
+<div class="page-head"><h1>Модерация</h1><p>Проверка новых приложений и артефактов.</p></div>
+<div class="tabs">
+  <a class="{{if eq .ModerationStatus "pending"}}active{{end}}" href="/admin/moderation?status=pending">Ожидают</a>
+  <a class="{{if eq .ModerationStatus "approved"}}active{{end}}" href="/admin/moderation?status=approved">Одобрены</a>
+  <a class="{{if eq .ModerationStatus "rejected"}}active{{end}}" href="/admin/moderation?status=rejected">Отклонены</a>
+</div>
+<div class="panel">
+<table>
+  <thead><tr><th>ID</th><th>Тип</th><th>Объект</th><th>Автор</th><th>Статус</th><th>Дата</th><th></th></tr></thead>
+  <tbody>
+  {{range .Moderation}}
+  <tr>
+    <td>{{.ID}}</td><td>{{.EntityType}}</td><td>{{.EntityID}}</td><td>{{.SubmittedBy}}</td><td>{{.Status}}</td><td>{{.CreatedAt}}</td>
+    <td class="actions">
+      {{if eq .Status "pending"}}
+      <form class="inline-form" method="post" action="/admin/moderation/{{.ID}}/approve"><input type="text" name="comment" placeholder="Комментарий"><button class="small ok" type="submit">✓</button></form>
+      <form class="inline-form confirm-danger" method="post" action="/admin/moderation/{{.ID}}/reject"><input type="text" name="comment" placeholder="Причина"><button class="small danger" type="submit">×</button></form>
+      {{else}}{{.ModeratorComment}}{{end}}
+    </td>
+  </tr>
+  {{else}}<tr><td colspan="7">Очередь пуста.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

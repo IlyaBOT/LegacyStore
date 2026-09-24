@@ -1,0 +1,67 @@
+{{define "layout"}}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Title}}{{.Title}} — {{end}}LegacyStore</title>
+  <link rel="stylesheet" href="/assets/site.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body>
+<div class="site-shell">
+  <div class="topbar">
+    <div class="brand"><a href="/">LegacyStore</a></div>
+    <div class="toolbar">
+      <a class="tool {{if eq .Active "home"}}active{{end}}" href="/"><span class="tool-icon">★</span><span>Featured</span></a>
+      <a class="tool {{if eq .Active "search"}}active{{end}}" href="/search"><span class="tool-icon">▥</span><span>Каталог</span></a>
+      {{if .User}}
+        <a class="tool {{if eq .Active "profile"}}active{{end}}" href="/account/profile"><span class="tool-icon">●</span><span>Профиль</span></a>
+      {{else}}
+        <a class="tool {{if eq .Active "account"}}active{{end}}" href="/account"><span class="tool-icon">●</span><span>Войти</span></a>
+      {{end}}
+      {{if or (hasRole .User "moder") (hasRole .User "admin")}}
+        <a class="tool {{if eq .Active "admin"}}active{{end}}" href="/admin"><span class="tool-icon">◆</span><span>Admin</span></a>
+      {{end}}
+    </div>
+    <form class="search" action="/search" method="get">
+      <input type="search" name="q" value="{{.Query}}" placeholder="Поиск">
+    </form>
+    <div class="clear"></div>
+  </div>
+
+  <div class="body">
+    <div class="sidebar">
+      <div class="side-title">Магазин</div>
+      <a class="side-link {{if eq .Active "home"}}active{{end}}" href="/">Featured</a>
+      <a class="side-link {{if eq .Active "search"}}active{{end}}" href="/search">Все приложения</a>
+
+      <div class="side-title">Аккаунт</div>
+      {{if .User}}
+        <a class="side-link {{if eq .Active "profile"}}active{{end}}" href="/account/profile">{{if .User.Nickname}}{{.User.Nickname}}{{else}}{{.User.Email}}{{end}}</a>
+        <form action="/account/logout" method="post"><button class="side-button" type="submit">Выйти</button></form>
+      {{else}}
+        <a class="side-link {{if eq .Active "account"}}active{{end}}" href="/account">Авторизация</a>
+      {{end}}
+
+      {{if or (hasRole .User "moder") (hasRole .User "admin")}}
+      <div class="side-title">Управление</div>
+      <a class="side-link {{if eq .Active "admin"}}active{{end}}" href="/admin">Dashboard</a>
+      <a class="side-link {{if eq .Active "moderation"}}active{{end}}" href="/admin/moderation">Модерация</a>
+      {{if hasRole .User "admin"}}<a class="side-link {{if eq .Active "system"}}active{{end}}" href="/admin/system">Система</a>{{end}}
+      {{end}}
+    </div>
+    <div class="content">
+      {{if .Notice}}<div class="notice success">{{.Notice}}</div>{{end}}
+      {{template "content" .}}
+    </div>
+    <div class="clear"></div>
+  </div>
+
+  <div class="statusbar">
+    <span>LegacyStore Web</span>
+    <span class="status-right">Server Rendered · Safari 5 compatible baseline</span>
+    <div class="clear"></div>
+  </div>
+</div>
+</body>
+</html>{{end}}

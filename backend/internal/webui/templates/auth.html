@@ -1,0 +1,51 @@
+{{define "content"}}
+<div class="auth-wrap">
+  <div class="auth-window">
+    <div class="auth-title">
+      {{if eq .Mode "register"}}Создать аккаунт{{else if eq .Mode "recovery"}}Восстановление пароля{{else if eq .Mode "reset"}}Новый пароль{{else}}Вход в LegacyStore{{end}}
+    </div>
+    {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
+
+    {{if eq .Mode "register"}}
+      <form method="post" action="/account/register">
+        <label>Имя <input type="text" name="nickname" maxlength="80" required></label>
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <label>Пароль <input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+        <label class="check"><input type="checkbox" name="remember_me" value="1" checked> Запомнить меня</label>
+        <button class="blue-button wide" type="submit">Зарегистрироваться</button>
+      </form>
+      <div class="auth-links"><a href="/account?mode=login">Уже есть аккаунт?</a></div>
+    {{else if eq .Mode "recovery"}}
+      <form method="post" action="/account/recovery">
+        <p class="help">Введите email. Если аккаунт существует, сервер отправит одноразовую ссылку.</p>
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <button class="blue-button wide" type="submit">Восстановить пароль</button>
+      </form>
+      <div class="auth-links"><a href="/account?mode=login">Вернуться ко входу</a></div>
+    {{else if eq .Mode "reset"}}
+      <form method="post" action="/account/reset">
+        <input type="hidden" name="token" value="{{.RecoveryToken}}">
+        <label>Новый пароль <input type="password" name="new_password" minlength="8" autocomplete="new-password" required></label>
+        <button class="blue-button wide" type="submit">Сохранить новый пароль</button>
+      </form>
+      <div class="auth-links"><a href="/account?mode=login">Вернуться ко входу</a></div>
+    {{else}}
+      <form method="post" action="/account/login">
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <label>Пароль <input type="password" name="password" autocomplete="current-password" required></label>
+        <div class="two-col">
+          <label>2FA-код <input type="text" name="totp_code" inputmode="numeric" maxlength="8"></label>
+          <label>Recovery-код <input type="text" name="recovery_code" maxlength="64"></label>
+          <div class="clear"></div>
+        </div>
+        <label class="check"><input type="checkbox" name="remember_me" value="1"> Запомнить меня</label>
+        <button class="blue-button wide" type="submit">Войти</button>
+      </form>
+      <div class="auth-links">
+        <a href="/account?mode=register">Нет аккаунта?</a>
+        <a href="/account?mode=recovery">Забыли пароль?</a>
+      </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

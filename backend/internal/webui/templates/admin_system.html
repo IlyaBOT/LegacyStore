@@ -1,0 +1,44 @@
+{{define "content"}}
+<div class="page-head"><h1>Управление системой</h1><p>Прямое администрирование данных LegacyStore. Опасные действия требуют подтверждения.</p></div>
+<div class="tabs admin-tabs">
+  <a class="{{if eq .SystemTab "users"}}active{{end}}" href="/admin/system?tab=users">Аккаунты</a>
+  <a class="{{if eq .SystemTab "apps"}}active{{end}}" href="/admin/system?tab=apps">Приложения</a>
+  <a class="{{if eq .SystemTab "uploads"}}active{{end}}" href="/admin/system?tab=uploads">Загрузки</a>
+  <a class="{{if eq .SystemTab "reviews"}}active{{end}}" href="/admin/system?tab=reviews">Комментарии</a>
+  <a class="{{if eq .SystemTab "audit"}}active{{end}}" href="/admin/system?tab=audit">Audit log</a>
+</div>
+
+{{if eq .SystemTab "users"}}
+<div class="panel">
+  <h2>Создать аккаунт</h2>
+  <form class="compact-form" method="post" action="/admin/system/users/create">
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="nickname" placeholder="Имя">
+    <input name="password" type="password" minlength="8" placeholder="Пароль" required>
+    <select name="role"><option value="user">user</option><option value="uploader">uploader</option><option value="trusted">trusted</option><option value="moder">moder</option></select>
+    <button class="blue-button" type="submit">Создать</button>
+  </form>
+</div>
+<div class="panel table-scroll"><table><thead><tr><th>ID</th><th>Email</th><th>Имя</th><th>Роли</th><th>Статус</th><th></th></tr></thead><tbody>
+{{range .Users}}<tr><form method="post" action="/admin/system/users/{{.ID}}/update"><td>{{.ID}}</td><td>{{.Email}}</td><td><input name="nickname" value="{{.Nickname}}"></td><td><input type="hidden" name="current_roles" value="{{join .Roles}}"><select name="role"><option value="">—</option><option>user</option><option>uploader</option><option>trusted</option><option>moder</option></select><small>{{roles .Roles}}</small></td><td><select name="status"><option {{if eq .Status "active"}}selected{{end}}>active</option><option {{if eq .Status "pending"}}selected{{end}}>pending</option><option {{if eq .Status "disabled"}}selected{{end}}>disabled</option></select><label class="mini-check"><input type="checkbox" name="email_verified" value="1" {{if .EmailVerified}}checked{{end}}> verified</label></td><td class="actions"><button type="submit">Сохранить</button></form><form class="inline-form confirm-danger" method="post" action="/admin/system/users/{{.ID}}/delete"><button class="danger" type="submit">Удалить</button></form></td></tr>{{end}}
+</tbody></table></div>
+
+{{else if eq .SystemTab "apps"}}
+<div class="panel"><h2>Создать приложение</h2><form class="wide-form" method="post" action="/admin/system/apps/create">
+<div class="form-row"><label>Slug<input name="slug" required></label><label>Название<input name="name" required></label><label>Разработчик<input name="developer_name" required></label></div>
+<div class="form-row"><label>Категория<input name="category_slug"></label><label>Bundle ID<input name="bundle_id"></label><label>Website<input name="website_url" type="url"></label></div>
+<label>Summary<input name="summary" required></label><label>Description<textarea name="description"></textarea></label><label>Source URL<input name="source_url" type="url"></label><button class="blue-button" type="submit">Создать</button></form></div>
+{{range .AdminApps}}<div class="panel record"><form method="post" action="/admin/system/apps/{{.ID}}/update"><h3>#{{.ID}} {{.Name}}</h3><div class="form-row"><label>Slug<input name="slug" value="{{.Slug}}"></label><label>Название<input name="name" value="{{.Name}}"></label><label>Разработчик<input name="developer_name" value="{{.DeveloperName}}"></label></div><label>Summary<input name="summary" value="{{.Summary}}"></label><label>Description<textarea name="description">{{.Description}}</textarea></label><div class="form-row"><label>Website<input name="website_url" value="{{.WebsiteURL}}"></label><label>Source<input name="source_url" value="{{.SourceURL}}"></label><label>Статус<select name="moderation_status"><option {{if eq .ModerationStatus "pending"}}selected{{end}}>pending</option><option {{if eq .ModerationStatus "approved"}}selected{{end}}>approved</option><option {{if eq .ModerationStatus "rejected"}}selected{{end}}>rejected</option></select></label></div><button type="submit">Сохранить</button></form><form class="confirm-danger delete-line" method="post" action="/admin/system/apps/{{.ID}}/delete"><button class="danger" type="submit">Удалить приложение</button></form></div>{{end}}
+
+{{else if eq .SystemTab "uploads"}}
+<div class="panel"><h2>Создать запись загрузки</h2><form class="wide-form" method="post" action="/admin/system/uploads/create"><div class="form-row"><label>Version ID<input name="version_id" required></label><label>Файл<input name="file_name" required></label><label>Тип<input name="package_type" placeholder="dmg/pkg/zip" required></label></div><div class="form-row"><label>Source<select name="source_type"><option>external</option><option>local</option></select></label><label>URL<input name="download_url"></label><label>Storage path<input name="storage_path"></label></div><div class="form-row"><label>Min OS<input name="min_os" value="10.4"></label><label>Max supported<input name="max_supported_os"></label><label>Architectures<input name="architectures" value="i386,x86_64"></label></div><label>SHA-256<input name="sha256"></label><label>Install notes<textarea name="install_notes"></textarea></label><button class="blue-button" type="submit">Создать</button></form></div>
+{{range .Artifacts}}<div class="panel record"><form method="post" action="/admin/system/uploads/{{.ID}}/update"><h3>#{{.ID}} {{.AppName}} {{.Version}} — {{.FileName}}</h3><div class="form-row"><label>Файл<input name="file_name" value="{{.FileName}}"></label><label>Тип<input name="package_type" value="{{.PackageType}}"></label><label>Source<input name="source_type" value="{{.SourceType}}"></label></div><div class="form-row"><label>URL<input name="download_url" value="{{.PrimaryDownloadURL}}"></label><label>Min OS<input name="min_os" value="{{.MinOS}}"></label><label>Max supported<input name="max_supported_os" value="{{.MaxSupportedOS}}"></label></div><div class="form-row"><label>Max tested<input name="max_tested_os" value="{{.MaxTestedOS}}"></label><label>Architectures<input name="architectures" value="{{join .Architectures}}"></label><label>Статус<input name="moderation_status" value="{{.ModerationStatus}}"></label></div><label>Install notes<textarea name="install_notes">{{.InstallNotes}}</textarea></label><button type="submit">Сохранить</button></form><form class="confirm-danger delete-line" method="post" action="/admin/system/uploads/{{.ID}}/delete"><button class="danger" type="submit">Удалить загрузку</button></form></div>{{end}}
+
+{{else if eq .SystemTab "reviews"}}
+<div class="panel"><h2>Создать комментарий</h2><form class="compact-form" method="post" action="/admin/system/reviews/create"><input name="app_slug" placeholder="App slug" required><input name="user_id" placeholder="User ID" required><select name="rating"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select><input name="title" placeholder="Заголовок"><input name="body" placeholder="Текст" maxlength="300"><button class="blue-button" type="submit">Создать</button></form></div>
+{{range .Reviews}}<div class="panel record {{if .Deleted}}deleted{{end}}"><form method="post" action="/admin/system/reviews/{{.ID}}/update"><h3>#{{.ID}} {{.AppSlug}} · {{.Author}} {{if .Deleted}}(deleted){{end}}</h3><div class="form-row"><label>Rating<input name="rating" value="{{.Rating}}"></label><label>Title<input name="title" value="{{.Title}}"></label></div><label>Body<textarea name="body" maxlength="300">{{.Body}}</textarea></label><button type="submit">Сохранить / восстановить</button></form><form class="confirm-danger delete-line" method="post" action="/admin/system/reviews/{{.ID}}/delete"><button class="danger" type="submit">Удалить</button></form></div>{{end}}
+
+{{else}}
+<div class="panel table-scroll"><table><thead><tr><th>Дата</th><th>Actor</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead><tbody>{{range .Audit}}<tr><td>{{index . "created_at"}}</td><td>{{index . "actor_user_id"}}</td><td>{{index . "action"}}</td><td>{{index . "entity_type"}} {{index . "entity_id"}}</td><td>{{index . "ip_address"}}</td></tr>{{end}}</tbody></table></div>
+{{end}}
+{{end}}
