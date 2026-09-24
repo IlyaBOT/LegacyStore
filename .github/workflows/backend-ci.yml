@@ -63,6 +63,7 @@ jobs:
           test -s backend/internal/webui/templates/admin_system.html
           test -s backend/internal/webui/assets/site.css
           test -s backend/internal/webui/assets/site.js
+          test -s backend/internal/webui/assets/catalog-hero.png
           if grep -Eq 'fetch[[:space:]]*\(|Promise|=>|(^|[^[:alnum:]_])(const|let|async)[[:space:]]' backend/internal/webui/assets/site.js; then
             echo "Modern JavaScript found in Safari 5 baseline."
             exit 1
@@ -72,10 +73,21 @@ jobs:
             exit 1
           fi
           grep -q '.content{[^}]*overflow:hidden' backend/internal/webui/assets/site.css
+          grep -q '.site-shell{[^}]*min-height:100%[^}]*padding-bottom:29px' backend/internal/webui/assets/site.css
+          grep -q '.sidebar{[^}]*position:absolute[^}]*top:54px[^}]*bottom:29px' backend/internal/webui/assets/site.css
+          grep -q '.statusbar{[^}]*position:absolute[^}]*bottom:0' backend/internal/webui/assets/site.css
+          grep -q '.app-icon-image{[^}]*width:100%[^}]*height:100%' backend/internal/webui/assets/site.css
           grep -q 'home-carousel' backend/internal/webui/assets/site.css
+          grep -q 'Welcome to LegacyStore!' backend/internal/webui/templates/home.html
+          grep -q '/assets/catalog-hero.png' backend/internal/webui/templates/home.html
+          grep -q 'Системные требования' backend/internal/webui/templates/app.html
           grep -q 'id="historyBack"' backend/internal/webui/templates/layout.html
           grep -q 'href="/top-charts"' backend/internal/webui/templates/layout.html
           grep -q 'href="/categories"' backend/internal/webui/templates/layout.html
+          if grep -q '<b>Совместимость</b>' backend/internal/webui/templates/app.html; then
+            echo "Ambiguous compatibility copy returned to the app page."
+            exit 1
+          fi
           if grep -Eq '>Purchases<|>Updates<' backend/internal/webui/templates/layout.html; then
             echo "Desktop-only toolbar items leaked into web navigation."
             exit 1

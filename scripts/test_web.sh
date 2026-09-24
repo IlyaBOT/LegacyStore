@@ -166,6 +166,90 @@ admin_pages() {
   ok "$N"
 }
 
+
+ui_welcome_carousel() {
+  N=UIWelcomeCarousel
+  html_get '/'
+  if [ "$STATUS" != 200 ] || ! grep -Fq 'Welcome to LegacyStore!' "$BODY" || ! grep -Fq '/assets/catalog-hero.png' "$BODY"; then
+    fail "$N" WelcomeSlide 'server-rendered welcome slide using catalog-hero.png' "$STATUS $(head -c 300 "$BODY")"; return
+  fi
+
+  SLIDES=$(grep -o 'data-carousel-slide' "$BODY" | wc -l | tr -d ' ')
+  DOTS=$(grep -o 'data-carousel-index=' "$BODY" | wc -l | tr -d ' ')
+  if [ "$SLIDES" -lt 2 ] || [ "$SLIDES" != "$DOTS" ]; then
+    fail "$N" CarouselStructure 'same number of >=2 slides and dots' "slides=$SLIDES dots=$DOTS"; return
+  fi
+
+  WELCOME_LINE=$(grep -n -m1 'Welcome to LegacyStore!' "$BODY" | cut -d: -f1)
+  METRIC_LINE=$(grep -n -m1 -E 'Most Popular|Most Downloaded|Top This Week|Top Today' "$BODY" | cut -d: -f1)
+  if [ -n "$METRIC_LINE" ] && [ "$WELCOME_LINE" -ge "$METRIC_LINE" ]; then
+    fail "$N" FirstSlide 'welcome slide before ranked app slides' "welcome_line=$WELCOME_LINE metric_line=$METRIC_LINE"; return
+  fi
+
+  html_get '/assets/catalog-hero.png'
+  if [ "$STATUS" != 200 ] || ! header '^Content-Type:[[:space:]]*image/png'; then
+    fail "$N" HeroAsset '200 image/png embedded hero asset' "$STATUS $(cat "$HEADERS")"; return
+  fi
+  ok "$N"
+}
+
+ui_icon_contract() {
+  N=UIAppIconContract
+  html_get '/'
+  if [ "$STATUS" != 200 ] || ! grep -Fq 'app-icon-fallback' "$BODY" || ! grep -Fq 'app-icon-image' "$BODY"; then
+    fail "$N" Markup 'icon image plus initial fallback in app cards' "$STATUS $(head -c 400 "$BODY")"; return
+  fi
+
+  html_get '/assets/site.css'
+  if [ "$STATUS" != 200 ] ||
+     ! grep -Fq '.app-icon-image{position:absolute;z-index:2;left:0;top:0;display:block;width:100%;height:100%' "$BODY" ||
+     ! grep -Fq '.app-icon.is-broken .app-icon-image' "$BODY"; then
+    fail "$N" CSS '64px icon image fills card and broken image can fall back' "$STATUS $(head -c 600 "$BODY")"; return
+  fi
+
+  html_get '/assets/site.js'
+  if [ "$STATUS" != 200 ] || ! grep -Fq 'wireImageFallbacks' "$BODY"; then
+    fail "$N" JSFallback 'ES5 image error fallback wiring' "$STATUS $(head -c 300 "$BODY")"; return
+  fi
+  ok "$N"
+}
+
+ui_layout_contract() {
+  N=UIClassicLayout
+  html_get '/assets/site.css'
+  if [ "$STATUS" != 200 ]; then
+    fail "$N" CSSStatus 200 "$STATUS"; return
+  fi
+  if ! grep -Fq '.site-shell{position:relative;min-width:760px;min-height:100%;padding-bottom:29px' "$BODY" ||
+     ! grep -Fq '.sidebar{position:absolute;left:0;top:54px;bottom:29px' "$BODY" ||
+     ! grep -Fq '.statusbar{position:absolute;left:0;right:0;bottom:0;height:29px' "$BODY"; then
+    fail "$N" StickyGeometry 'relative shell + full-height sidebar + bottom statusbar' "$(head -c 800 "$BODY")"; return
+  fi
+  if grep -Fq 'min-height:620px' "$BODY"; then
+    fail "$N" FixedHeight 'no fixed 620px viewport hack' 'min-height:620px still present'; return
+  fi
+  if ! grep -Fq '@media screen and (max-width:1000px)' "$BODY" ||
+     ! grep -Fq '@media screen and (max-width:820px)' "$BODY" ||
+     ! grep -Fq '@media screen and (min-width:1400px)' "$BODY"; then
+    fail "$N" Viewports '4:3/narrow and wide responsive contracts' 'missing responsive breakpoint'; return
+  fi
+  ok "$N"
+}
+
+ui_requirements_copy() {
+  N=UISystemRequirements
+  html_get '/app/pixelmator'
+  if [ "$STATUS" != 200 ] ||
+     ! grep -Fq 'Системные требования' "$BODY" ||
+     ! grep -Fq 'OS X ' "$BODY"; then
+    fail "$N" Requirements 'explicit OS X and architecture requirements' "$STATUS $(head -c 500 "$BODY")"; return
+  fi
+  if grep -Fq '<b>Совместимость</b>' "$BODY" || grep -Fq '>Совместимо<' "$BODY"; then
+    fail "$N" AmbiguousCopy 'no context-free compatibility label' "$(head -c 500 "$BODY")"; return
+  fi
+  ok "$N"
+}
+
 proxy_bootstrap() {
   N=WebProxyBootstrap
   api_request GET '/api/v1/bootstrap'
@@ -194,6 +278,10 @@ ssr_shell
 auth_modes
 ssr_account_lifecycle
 catalog_pages
+ui_welcome_carousel
+ui_icon_contract
+ui_layout_contract
+ui_requirements_copy
 admin_pages
 proxy_bootstrap
 plain_http_rejected
