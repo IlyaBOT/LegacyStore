@@ -10,30 +10,34 @@
 <body>
 <div class="site-shell">
   <div class="topbar">
-    <div class="brand"><a href="/">LegacyStore</a></div>
-    <div class="toolbar">
-      <a class="tool {{if eq .Active "home"}}active{{end}}" href="/"><span class="tool-icon">★</span><span>Featured</span></a>
-      <a class="tool {{if eq .Active "search"}}active{{end}}" href="/search"><span class="tool-icon">▥</span><span>Каталог</span></a>
-      {{if .User}}
-        <a class="tool {{if eq .Active "profile"}}active{{end}}" href="/account/profile"><span class="tool-icon">●</span><span>Профиль</span></a>
-      {{else}}
-        <a class="tool {{if eq .Active "account"}}active{{end}}" href="/account"><span class="tool-icon">●</span><span>Войти</span></a>
-      {{end}}
-      {{if or (hasRole .User "moder") (hasRole .User "admin")}}
-        <a class="tool {{if eq .Active "admin"}}active{{end}}" href="/admin"><span class="tool-icon">◆</span><span>Admin</span></a>
-      {{end}}
+    <div class="history-controls">
+      <button class="history-button previous" id="historyBack" type="button" title="Назад"><span>Назад</span></button><button class="history-button next" id="historyForward" type="button" title="Вперёд"><span>Вперёд</span></button>
     </div>
+
+    <div class="toolbar">
+      <a class="tool {{if eq .Active "home"}}active{{end}}" href="/">
+        <span class="tool-icon icon-featured">✦</span><span class="tool-label">Featured</span>
+      </a>
+      <a class="tool {{if eq .Active "top-charts"}}active{{end}}" href="/top-charts">
+        <span class="tool-icon icon-charts">★</span><span class="tool-label">Top Charts</span>
+      </a>
+      <a class="tool {{if eq .Active "categories"}}active{{end}}" href="/categories">
+        <span class="tool-icon icon-categories">▤</span><span class="tool-label">Categories</span>
+      </a>
+    </div>
+
     <form class="search" action="/search" method="get">
+      <span class="search-mark">⌕</span>
       <input type="search" name="q" value="{{.Query}}" placeholder="Поиск">
     </form>
-    <div class="clear"></div>
   </div>
 
   <div class="body">
     <div class="sidebar">
       <div class="side-title">Магазин</div>
       <a class="side-link {{if eq .Active "home"}}active{{end}}" href="/">Featured</a>
-      <a class="side-link {{if eq .Active "search"}}active{{end}}" href="/search">Все приложения</a>
+      <a class="side-link {{if eq .Active "top-charts"}}active{{end}}" href="/top-charts">Top Charts</a>
+      <a class="side-link {{if eq .Active "categories"}}active{{end}}" href="/categories">Categories</a>
 
       <div class="side-title">Аккаунт</div>
       {{if .User}}

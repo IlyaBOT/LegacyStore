@@ -58,7 +58,7 @@ header() { grep -Eiq "$1" "$HEADERS"; }
 ssr_shell() {
   N=SSRWebShell
   html_get '/'
-  if [ "$STATUS" != 200 ] || ! grep -Fq '/assets/site.css' "$BODY" || ! grep -Fq '/assets/site.js' "$BODY" || ! grep -Fq 'Featured' "$BODY"; then
+  if [ "$STATUS" != 200 ] || ! grep -Fq '/assets/site.css' "$BODY" || ! grep -Fq '/assets/site.js' "$BODY" || ! grep -Fq 'Featured' "$BODY" || ! grep -Fq 'Top Charts' "$BODY" || ! grep -Fq 'Categories' "$BODY" || ! grep -Fq 'homeCarousel' "$BODY"; then
     fail "$N" HtmlShell '200 server-rendered shell with embedded assets' "$STATUS $(head -c 300 "$BODY")"; return
   fi
   if grep -Fq '/app.js' "$BODY" || grep -Fq 'data-route=' "$BODY"; then
@@ -124,6 +124,14 @@ catalog_pages() {
   html_get '/search?q=Pixelmator'
   if [ "$STATUS" != 200 ] || ! grep -Fq 'Pixelmator' "$BODY"; then
     fail "$N" Search 'SSR search results' "$STATUS $(head -c 300 "$BODY")"; return
+  fi
+  html_get '/top-charts'
+  if [ "$STATUS" != 200 ] || ! grep -Fq 'Top Charts' "$BODY"; then
+    fail "$N" TopCharts 'SSR top charts page' "$STATUS $(head -c 300 "$BODY")"; return
+  fi
+  html_get '/categories'
+  if [ "$STATUS" != 200 ] || ! grep -Fq 'Categories' "$BODY"; then
+    fail "$N" Categories 'SSR categories page' "$STATUS $(head -c 300 "$BODY")"; return
   fi
   html_get '/app/pixelmator'
   if [ "$STATUS" != 200 ] || ! grep -Fq 'Описание' "$BODY" || ! grep -Fq 'Версии' "$BODY"; then

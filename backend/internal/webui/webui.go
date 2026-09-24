@@ -40,6 +40,7 @@ type PageData struct {
 	Home             *catalog.HomeFeed
 	Hero             *catalog.HomeSlide
 	Apps             []catalog.AppSummary
+	Categories       []catalog.Category
 	App              *catalog.AppDetail
 	AppReviews       []catalog.Review
 	Query            string
@@ -89,7 +90,7 @@ func New(cfg config.Config, catalogStore *catalog.Store, userStore *account.Stor
 			return strings.ToUpper(string(runes[0]))
 		},
 	}
-	for _, page := range []string{"home", "app", "auth", "profile", "admin_dashboard", "admin_moderation", "admin_system", "error"} {
+	for _, page := range []string{"home", "top_charts", "categories", "app", "auth", "profile", "admin_dashboard", "admin_moderation", "admin_system", "error"} {
 		t, err := template.New("layout.html").Funcs(funcs).ParseFS(embeddedFiles, "templates/layout.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, fmt.Errorf("parse %s template: %w", page, err)
@@ -102,6 +103,8 @@ func New(cfg config.Config, catalogStore *catalog.Store, userStore *account.Stor
 
 func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /", h.home)
+	h.mux.HandleFunc("GET /top-charts", h.topCharts)
+	h.mux.HandleFunc("GET /categories", h.categories)
 	h.mux.HandleFunc("GET /search", h.search)
 	h.mux.HandleFunc("GET /app/{slug}", h.appDetail)
 	h.mux.HandleFunc("GET /download/{id}", h.download)
@@ -234,6 +237,38 @@ func (h *Handler) home(w http.ResponseWriter, req *http.Request) {
 	h.render(w, "home", http.StatusOK, data)
 }
 
+func (h *Handler) topCharts(w http.ResponseWriter, req *http.Request) {
+	data := h.baseData(req, "Top Charts", "top-charts")
+	if h.catalog == nil {
+		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
+		return
+	}
+	apps, err := h.catalog.Apps(req.Context(), catalog.Filters{
+		Page: 1, Limit: 50, Sort: "popular",
+	})
+	if err != nil {
+		h.renderError(w, req, http.StatusInternalServerError, "Не удалось загрузить рейтинг приложений.")
+		return
+	}
+	data.Apps = apps
+	h.render(w, "top_charts", http.StatusOK, data)
+}
+
+func (h *Handler) categories(w http.ResponseWriter, req *http.Request) {
+	data := h.baseData(req, "Categories", "categories")
+	if h.catalog == nil {
+		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
+		return
+	}
+	categories, err := h.catalog.Categories(req.Context())
+	if err != nil {
+		h.renderError(w, req, http.StatusInternalServerError, "Не удалось загрузить категории.")
+		return
+	}
+	data.Categories = categories
+	h.render(w, "categories", http.StatusOK, data)
+}
+
 func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 	data := h.baseData(req, "Поиск", "search")
 	if h.catalog == nil {
@@ -256,7 +291,7 @@ func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *Handler) appDetail(w http.ResponseWriter, req *http.Request) {
-	data := h.baseData(req, "Приложение", "search")
+	data := h.baseData(req, "Приложение", "categories")
 	if h.catalog == nil {
 		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
 		return

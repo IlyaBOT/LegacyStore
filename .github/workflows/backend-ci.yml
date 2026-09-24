@@ -54,6 +54,8 @@ jobs:
           set -euo pipefail
           test -s backend/internal/webui/templates/layout.html
           test -s backend/internal/webui/templates/home.html
+          test -s backend/internal/webui/templates/top_charts.html
+          test -s backend/internal/webui/templates/categories.html
           test -s backend/internal/webui/templates/auth.html
           test -s backend/internal/webui/templates/profile.html
           test -s backend/internal/webui/templates/admin_dashboard.html
@@ -67,6 +69,15 @@ jobs:
           fi
           if grep -Eq 'display:[[:space:]]*(grid|flex)|grid-template|--[a-zA-Z0-9_-]+:' backend/internal/webui/assets/site.css; then
             echo "Modern layout primitive found in Safari 5 baseline."
+            exit 1
+          fi
+          grep -q '.content{[^}]*overflow:hidden' backend/internal/webui/assets/site.css
+          grep -q 'home-carousel' backend/internal/webui/assets/site.css
+          grep -q 'id="historyBack"' backend/internal/webui/templates/layout.html
+          grep -q 'href="/top-charts"' backend/internal/webui/templates/layout.html
+          grep -q 'href="/categories"' backend/internal/webui/templates/layout.html
+          if grep -Eq '>Purchases<|>Updates<' backend/internal/webui/templates/layout.html; then
+            echo "Desktop-only toolbar items leaked into web navigation."
             exit 1
           fi
 

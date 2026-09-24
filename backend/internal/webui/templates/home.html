@@ -6,20 +6,35 @@
   </div>
 {{else}}
   {{if .Home}}
-    {{with .Hero}}
-    <div class="hero">
-      <div class="hero-icon">{{if .App.Icon}}<img src="{{.App.Icon}}" alt="">{{else}}{{initial .App.Name}}{{end}}</div>
-      <div class="hero-copy">
-        <div class="hero-kicker">{{.Metric}}</div>
-        <h1>{{.App.Name}}</h1>
-        <p>{{.App.Summary}}</p>
-        <a class="blue-button" href="/app/{{.App.Slug}}">Подробнее</a>
+    {{if .Home.Slides}}
+    <div class="home-carousel" id="homeCarousel">
+      <div class="home-carousel-stage">
+        {{range $index, $slide := .Home.Slides}}
+        <div class="home-carousel-slide {{if eq $index 0}}is-active{{end}}" data-carousel-slide>
+          {{if $slide.App.HeroImage}}
+            <img class="home-carousel-art hero-shot" src="{{$slide.App.HeroImage}}" alt="">
+          {{else if $slide.App.Icon}}
+            <img class="home-carousel-art app-icon-art" src="{{$slide.App.Icon}}" alt="">
+          {{end}}
+          <div class="home-carousel-shade"></div>
+          <div class="home-carousel-content">
+            <span class="carousel-eyebrow">{{$slide.Metric}}</span>
+            <h1>{{$slide.App.Name}}</h1>
+            <p>{{$slide.App.Summary}}</p>
+            <a class="blue-button" href="/app/{{$slide.App.Slug}}">Подробнее</a>
+          </div>
+        </div>
+        {{end}}
       </div>
-      <div class="clear"></div>
+      <button class="carousel-arrow carousel-previous" id="carouselPrevious" type="button" title="Предыдущий слайд"><span>‹</span></button>
+      <button class="carousel-arrow carousel-next" id="carouselNext" type="button" title="Следующий слайд"><span>›</span></button>
+      <div class="home-carousel-dots">
+        {{range $index, $slide := .Home.Slides}}<button class="home-carousel-dot {{if eq $index 0}}is-active{{end}}" data-carousel-index="{{$index}}" type="button" title="Слайд"></button>{{end}}
+      </div>
     </div>
     {{end}}
 
-    <div class="section-title"><h2>Популярное</h2><a href="/search?sort=popular">Показать всё</a></div>
+    <div class="section-title"><h2>Популярное</h2><a href="/top-charts">Показать всё</a></div>
     <div class="app-list">{{range .Home.Popular}}{{template "app-card" .}}{{else}}<div class="empty">Каталог пока пуст.</div>{{end}}</div>
 
     <div class="section-title"><h2>Новые релизы</h2></div>
