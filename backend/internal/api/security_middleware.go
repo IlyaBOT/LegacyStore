@@ -93,7 +93,11 @@ func isCredentialEndpoint(req *http.Request) bool {
 		return false
 	}
 	switch req.URL.Path {
-	case "/api/v1/auth/login",
+	case "/account/login",
+		"/account/register",
+		"/account/recovery",
+		"/account/reset",
+		"/api/v1/auth/login",
 		"/api/v1/auth/register",
 		"/api/v1/auth/legacy/login",
 		"/api/v1/auth/2fa/verify",

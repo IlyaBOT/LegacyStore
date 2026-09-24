@@ -6,7 +6,7 @@
   </div>
 {{else}}
   {{if .Home}}
-    {{with index .Home.Slides 0}}
+    {{with .Hero}}
     <div class="hero">
       <div class="hero-icon">{{if .App.Icon}}<img src="{{.App.Icon}}" alt="">{{else}}{{initial .App.Name}}{{end}}</div>
       <div class="hero-copy">

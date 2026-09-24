@@ -17,6 +17,7 @@ import (
 	"legacystore/backend/internal/catalogsign"
 	"legacystore/backend/internal/config"
 	"legacystore/backend/internal/db"
+	"legacystore/backend/internal/webui"
 )
 
 func main() {
@@ -56,7 +57,13 @@ func main() {
 		log.Printf("catalog signing enabled with key %s", signer.KeyID())
 	}
 
-	handler := api.NewRouterWithSigner(cfg, catalog.NewStore(conn), accountStore, signer)
+	catalogStore := catalog.NewStore(conn)
+	apiHandler := api.NewRouterWithSigner(cfg, catalogStore, accountStore, signer)
+	handler, err := webui.New(cfg, catalogStore, accountStore, apiHandler)
+	if err != nil {
+		log.Fatalf("web frontend initialization failed: %v", err)
+	}
+
 	server := &http.Server{
 		Addr:              cfg.Addr(),
 		Handler:           api.SecurityMiddleware(handler),

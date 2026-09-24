@@ -38,7 +38,10 @@ type PageData struct {
 	User             *account.User
 	Session          *account.Session
 	Home             *catalog.HomeFeed
+	Hero             *catalog.HomeSlide
 	Apps             []catalog.AppSummary
+	App              *catalog.AppDetail
+	AppReviews       []catalog.Review
 	Query            string
 	IsSearch         bool
 	Mode             string
@@ -86,7 +89,7 @@ func New(cfg config.Config, catalogStore *catalog.Store, userStore *account.Stor
 			return strings.ToUpper(string(runes[0]))
 		},
 	}
-	for _, page := range []string{"home", "auth", "profile", "admin_dashboard", "admin_moderation", "admin_system", "error"} {
+	for _, page := range []string{"home", "app", "auth", "profile", "admin_dashboard", "admin_moderation", "admin_system", "error"} {
 		t, err := template.New("layout.html").Funcs(funcs).ParseFS(embeddedFiles, "templates/layout.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, fmt.Errorf("parse %s template: %w", page, err)
@@ -100,6 +103,8 @@ func New(cfg config.Config, catalogStore *catalog.Store, userStore *account.Stor
 func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /", h.home)
 	h.mux.HandleFunc("GET /search", h.search)
+	h.mux.HandleFunc("GET /app/{slug}", h.appDetail)
+	h.mux.HandleFunc("GET /download/{id}", h.download)
 	h.mux.HandleFunc("GET /account", h.authPage)
 	h.mux.HandleFunc("POST /account/login", h.login)
 	h.mux.HandleFunc("POST /account/register", h.register)
@@ -223,6 +228,9 @@ func (h *Handler) home(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	data.Home = feed
+	if len(feed.Slides) > 0 {
+		data.Hero = &feed.Slides[0]
+	}
 	h.render(w, "home", http.StatusOK, data)
 }
 
@@ -235,7 +243,9 @@ func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 	data.Query = strings.TrimSpace(req.URL.Query().Get("q"))
 	data.IsSearch = true
 	if data.Query != "" {
-		apps, err := h.catalog.Apps(req.Context(), catalog.Filters{Page: 1, Limit: 48, Query: data.Query})
+		apps, err := h.catalog.Apps(req.Context(), catalog.Filters{
+			Page: 1, Limit: 48, Query: data.Query, Sort: strings.TrimSpace(req.URL.Query().Get("sort")),
+		})
 		if err != nil {
 			h.renderError(w, req, http.StatusInternalServerError, "Поиск не удался.")
 			return
@@ -243,6 +253,73 @@ func (h *Handler) search(w http.ResponseWriter, req *http.Request) {
 		data.Apps = apps
 	}
 	h.render(w, "home", http.StatusOK, data)
+}
+
+func (h *Handler) appDetail(w http.ResponseWriter, req *http.Request) {
+	data := h.baseData(req, "Приложение", "search")
+	if h.catalog == nil {
+		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
+		return
+	}
+	app, err := h.catalog.AppBySlug(req.Context(), req.PathValue("slug"), compatibility.Target{})
+	if errors.Is(err, catalog.ErrNotFound) {
+		h.renderError(w, req, http.StatusNotFound, "Приложение не найдено.")
+		return
+	}
+	if err != nil {
+		h.renderError(w, req, http.StatusInternalServerError, "Не удалось загрузить приложение.")
+		return
+	}
+	reviews, err := h.catalog.Reviews(req.Context(), app.Slug)
+	if err != nil && !errors.Is(err, catalog.ErrNotFound) {
+		h.renderError(w, req, http.StatusInternalServerError, "Не удалось загрузить отзывы.")
+		return
+	}
+	data.Title = app.Name
+	data.App = app
+	data.AppReviews = reviews
+	h.render(w, "app", http.StatusOK, data)
+}
+
+func (h *Handler) download(w http.ResponseWriter, req *http.Request) {
+	if h.catalog == nil {
+		h.renderError(w, req, http.StatusServiceUnavailable, "Каталог временно недоступен.")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		h.renderError(w, req, http.StatusBadRequest, "Некорректный идентификатор загрузки.")
+		return
+	}
+	item, err := h.catalog.Download(req.Context(), id, compatibility.Target{})
+	if errors.Is(err, catalog.ErrNotFound) {
+		h.renderError(w, req, http.StatusNotFound, "Файл не найден.")
+		return
+	}
+	if err != nil {
+		h.renderError(w, req, http.StatusInternalServerError, "Не удалось подготовить загрузку.")
+		return
+	}
+
+	target := strings.TrimSpace(item.DownloadURL)
+	switch item.SourceType {
+	case "local":
+		target = "/api/v1/files/" + strconv.FormatInt(id, 10)
+	case "external_page":
+		target = strings.TrimSpace(item.ExternalPageURL)
+	}
+	if target == "" {
+		if item.TorrentURL != "" {
+			target = item.TorrentURL
+		} else if item.MagnetURL != "" {
+			target = item.MagnetURL
+		}
+	}
+	if target == "" {
+		h.renderError(w, req, http.StatusNotFound, "Для этого файла не настроен источник загрузки.")
+		return
+	}
+	http.Redirect(w, req, target, http.StatusSeeOther)
 }
 
 func (h *Handler) authPage(w http.ResponseWriter, req *http.Request) {
