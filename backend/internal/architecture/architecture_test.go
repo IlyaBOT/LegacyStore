@@ -16,6 +16,28 @@ func TestNormalizeAndLabels(t *testing.T) {
 	}
 }
 
+func TestNormalizeAliases(t *testing.T) {
+	cases := map[string]string{
+		"amd64":     "x86_64",
+		"x64":       "x86_64",
+		"x86-64":    "x86_64",
+		"x86":       "i386",
+		"386":       "i386",
+		"686":       "i686",
+		"powerpc":   "ppc",
+		"powerpc64": "ppc64",
+	}
+	for input, want := range cases {
+		got, err := NormalizeOne(input)
+		if err != nil {
+			t.Fatalf("NormalizeOne(%q): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("NormalizeOne(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestIntelCompatibility(t *testing.T) {
 	if !Compatible("x86_64", []string{"i386"}, true) {
 		t.Fatal("x86_64 Mac before Catalina should accept i386 applications")
